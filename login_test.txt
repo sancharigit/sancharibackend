@@ -1,0 +1,63 @@
+{
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "driverDetails": {
+      "vehicle": {
+        "make": "",
+        "model": "",
+        "year": "",
+        "plateNumber": "",
+        "color": "",
+        "type": "Sedan",
+        "fuelType": "Petrol",
+        "seatingCapacity": 4,
+        "bootSpace": ""
+      },
+      "currentLocation": {
+        "type": "Point",
+        "coordinates": [
+          0,
+          0
+        ]
+      },
+      "ratings": {
+        "average": 0,
+        "count": 0
+      },
+      "preferences": {
+        "outstationRatePerKm": 15,
+        "nightCharge": 250,
+        "allowNightStay": false
+      },
+      "isOnline": false,
+      "earnings": 0
+    },
+    "verificationStatus": {
+      "email": false,
+      "phone": false,
+      "idCard": false,
+      "communityTrusted": false
+    },
+    "travelStats": {
+      "totalSavings": 1240,
+      "co2Saved": 18
+    },
+    "driverApprovalStatus": "pending",
+    "profileImage": "",
+    "ridePersonality": [
+      "Quiet Ride",
+      "AC On"
+    ],
+    "isBlocked": false,
+    "walletBalance": 0,
+    "_id": "699eb59fff9649b68674695c",
+    "name": "Super Admin",
+    "email": "admin@hybridride.com",
+    "phone": "0000000000",
+    "role": "admin",
+    "__v": 0,
+    "savedPlaces": [],
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5OWViNTlmZmY5NjQ5YjY4Njc0Njk1YyIsImlhdCI6MTc3MjAwOTI4NiwiZXhwIjoxNzc0NjAxMjg2fQ.CWvfg6RtPOEdrtneEcj5ZVGnltGOIJ1Ck-KBh-QZDeI"
+  }
+}
