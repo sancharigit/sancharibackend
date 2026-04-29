@@ -1,33 +1,37 @@
 import multer from 'multer';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import { v2 as cloudinary } from 'cloudinary';
-import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
 
-dotenv.config();
+// Ensure uploads directory exists
+const uploadDir = 'uploads';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-// Consolidated Cloudinary config
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME?.trim(),
-  api_key: process.env.CLOUDINARY_API_KEY?.trim(),
-  api_secret: process.env.CLOUDINARY_API_SECRET?.trim(),
-});
-
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'hybrid_ride_uploads',
-        format: 'jpg',
-        public_id: (req, file) => {
-            console.log("MULTER DEBUG: Inside public_id for", file.originalname);
-            const userId = req.user ? req.user._id.toString() : 'unknown';
-            return `upload-${userId}-${Date.now()}`;
-        },
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
     },
+    filename: (req, file, cb) => {
+        const userId = req.user ? req.user._id.toString() : 'unknown';
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `profile-${userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
 });
 
 const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const filetypes = /jpeg|jpg|png|webp/;
+        const mimetype = filetypes.test(file.mimetype);
+        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+
+        if (mimetype && extname) {
+            return cb(null, true);
+        }
+        cb(new Error("Only images (jpeg, jpg, png, webp) are allowed"));
+    }
 });
 
 export default upload;

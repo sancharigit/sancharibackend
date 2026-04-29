@@ -128,8 +128,8 @@ export const uploadDocument = async (req, res) => {
             return res.status(403).json({ success: false, message: 'Passengers can only upload profile images' });
         }
         
-        // Return the path - Cloudinary provides the full URL in req.file.path
-        const filePath = req.file.path || `/uploads/${req.file.filename}`;
+        // Store as /uploads/filename for web-friendly access
+        const filePath = `/uploads/${req.file.filename}`;
         
         let updateQuery = {};
         if (docType === 'profileImage') {

@@ -1,6 +1,7 @@
 import express from 'express';
-import { register, login, getMe, googleLogin, verifyOTP, whatsappLogin } from '../Controllers/authController.js';
+import { register, login, getMe, googleLogin, verifyOTP, whatsappLogin, updateProfile } from '../Controllers/authController.js';
 import { protect } from '../Middleware/authMiddleware.js';
+import upload from '../Utils/multer.js';
 
 const router = express.Router();
 
@@ -14,5 +15,8 @@ router.post('/google', googleLogin);  // POST /api/auth/google
 
 // Protected routes
 router.get('/me', protect, getMe);    // GET  /api/auth/me
+router.put('/profile', protect, upload.single('profileImage'), updateProfile); // PUT  /api/auth/profile
 
 export default router;
+
+

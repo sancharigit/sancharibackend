@@ -7,21 +7,21 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true,
+      // unique: true,
       trim: true,
       lowercase: true,
     },
 
     phone: {
       type: String,
-      unique: true,
+      // unique: true,
       sparse: true, // Allows multiple null/undefined values for users who signed up via Google
       index: true,
     },
 
     password: {
       type: String,
-      required: true,
+      required: false,
       minlength: 6,
     },
 
@@ -64,11 +64,11 @@ const userSchema = new mongoose.Schema(
         },
         seatingCapacity: { type: Number, default: 4 },
         bootSpace: { type: String, default: "" },
-      }, 
+      },
 
       documents: {
         aadharFront: { type: String },
-        aadharBack: { type: String }, 
+        aadharBack: { type: String },
         panCard: { type: String },
         licenseFront: { type: String },
         licenseBack: { type: String },

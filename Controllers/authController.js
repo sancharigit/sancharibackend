@@ -33,15 +33,28 @@ export const register = async (req, res) => {
             return sendError(res, 400, 'Please provide a password');
         }
 
-        const userExists = await User.findOne({ $or: [{ email }, { phone }] });
+        const normalizedRole = role?.toLowerCase() || 'passenger';
+        console.log("kakakakakka", normalizedRole)
+        const userExists = await User.findOne({
+            $and: [
+                { $or: [{ email }, { phone }] },
+                { role: normalizedRole }
+            ]
+        });
+
         if (userExists) {
-            console.log(`DEBUG: User already exists: ${email} / ${phone}`);
-            return sendError(res, 409, 'User with this email or phone already exists');
+            return sendError(res, 409,
+                `A ${normalizedRole} account with this email or phone already exists. Please login instead.`
+            );
         }
 
-        const hashedPassword = await bcrypt.hash(req.body.googleIdToken ? req.body.googleIdToken + (process.env.JWT_SECRET || 'secret') : password, 10);
+        // Different role (driver→passenger or passenger→driver) — allow registration
+        // Just continue below, don't return
 
-        const normalizedRole = role?.toLowerCase() || 'passenger';
+        // const normalizedRole = role?.toLowerCase() || 'passenger';
+        const hashedPassword = await bcrypt.hash(req.body.googleIdToken ? req.body.googleIdToken + (process.env.JWT_SECRET || 'secret') : password, 10);
+        console.log(`DEBUG: Normalized role for ${email}: ${normalizedRole}`);
+
         console.log(`DEBUG: Normalized role for ${email}: ${normalizedRole}`);
 
         let driverDetailsData = undefined;
@@ -139,29 +152,37 @@ export const register = async (req, res) => {
     }
 };
 
+
 // ─── @route  POST /api/auth/login ───────────────────────────────
 // @desc   Login with email/phone + password
 // @access Public
 export const login = async (req, res) => {
     try {
-        console.log(";;;;;;;;;;;;;;;;;;;;;;;;;;;;")
-        const { email, phone, password } = req.body;
-        console.log(";;;;;", req.body)
+        const { email, phone, password, role } = req.body;
 
         if (!password || (!email && !phone)) {
             return sendError(res, 400, 'Please provide (email or phone) and password');
         }
 
-        const query = email ? { email } : { phone };
+        const normalizedRole = role?.toLowerCase() || 'passenger';
+        const query = {
+            ...(email ? { email } : { phone }),
+            role: normalizedRole
+        };
         const user = await User.findOne(query);
+        console.log("user found", user)
 
         if (!user) {
             return sendError(res, 401, 'Invalid credentials');
         }
-
+        console.log("user role", user.role)
         // --- NEW: Role Verification ---
-        if (req.body.role && user.role !== req.body.role.toLowerCase()) {
-            return sendError(res, 403, `This account is registered as a ${user.role.charAt(0).toUpperCase() + user.role.slice(1)}. Please log in through the correct application section.`);
+        if (req.body.role && !user.role.includes(req.body.role.toLowerCase())) {
+            return sendError(
+                res,
+                403,
+                `You are not registered as a ${req.body.role}`
+            );
         }
 
 
@@ -241,13 +262,16 @@ export const login = async (req, res) => {
 // @access Public
 export const verifyOTP = async (req, res) => {
     try {
-        const { phone, otp } = req.body;
+        const { phone, otp, role } = req.body;
 
         if (!phone || !otp) {
             return sendError(res, 400, 'Please provide phone and OTP');
         }
 
-        const user = await User.findOne({ phone });
+        const normalizedRole = role?.toLowerCase() || 'passenger';
+        const user = await User.findOne({ phone, role: normalizedRole });
+        console.log("user", user);
+        console.log("user", user)
 
         if (!user || user.otp !== otp || user.otpExpires < new Date()) {
             return sendError(res, 401, 'Invalid or expired OTP');
@@ -290,12 +314,14 @@ export const googleLogin = async (req, res) => {
         if (!idToken) {
             return sendError(res, 400, 'Please provide idToken');
         }
-
+        console.log("hhshshshshshssh")
         const ticket = await googleClient.verifyIdToken({
             idToken,
-            audience: '110831328035-bqft18nqtfk06o3qrc78d414s731m8b5.apps.googleusercontent.com',
+            audience: '909296510785-e3a279afthh5br10j180ie4lidh9ucp2.apps.googleusercontent.com',
         });
+        console.log("ticket", ticket)
         const payload = ticket.getPayload();
+
 
         if (!payload || !payload.email) {
             return sendError(res, 400, 'Invalid Google Token');
@@ -303,21 +329,24 @@ export const googleLogin = async (req, res) => {
 
         const { email, name, picture } = payload;
 
-        let user = await User.findOne({ email });
+        let user = await User.findOne({ email, role: role?.toLowerCase() || 'passenger' });
 
+        // if (user) {
+        //     return sendError(
+        //         res,
+        //         403,
+        //         `This account is already registered as ${user.role}`
+        //     );
+        // }
+
+        // ✅ Auto create user
         if (!user) {
-            // User does not exist in our database.
-            // Return 404 with Google payload so frontend can route to Profile Setup.
-            return res.status(404).json({
-                success: false,
-                isRegistered: false,
-                message: 'User not registered',
-                googleData: {
-                    email,
-                    name: name || 'Google User',
-                    picture,
-                    idToken
-                }
+            user = await User.create({
+                email,
+                name: name || 'Google User',
+                profileImage: picture,
+                role: role?.toLowerCase() || 'passenger',
+                isGoogleUser: true
             });
         }
 
@@ -346,14 +375,18 @@ export const googleLogin = async (req, res) => {
 // @access Public
 export const whatsappLogin = async (req, res) => {
     try {
-        const { phone } = req.body;
+        const { phone, role } = req.body;
         console.log("whatsapp login", req.body)
 
         if (!phone) {
             return sendError(res, 400, 'Please provide a phone number');
         }
 
-        const user = await User.findOne({ phone: phone.replace(/\D/g, '').slice(-10) });
+        const normalizedRole = role?.toLowerCase() || 'passenger';
+        const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+        const user = await User.findOne({ phone: cleanPhone, role: normalizedRole });
+
 
         if (!user) {
             return sendError(res, 404, 'User not found. Please sign up first.');
@@ -411,3 +444,53 @@ export const getMe = async (req, res) => {
         return sendError(res, 500, 'Server error fetching profile');
     }
 };
+
+// ─── @route  PUT /api/auth/profile ───────────────────────────────
+// @desc   Update logged-in user's profile
+// @access Private
+export const updateProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return sendError(res, 404, 'User not found');
+        }
+
+        // 1. Handle File Upload (if any)
+        if (req.file) {
+            // Store path as /uploads/filename for static serving
+            user.profileImage = `/uploads/${req.file.filename}`;
+        }
+
+        // 2. Handle Text Fields
+        let { name, email, phone, ridePersonality, savedPlaces } = req.body;
+
+        // If using form-data, arrays/objects might arrive as strings
+        if (typeof ridePersonality === 'string') {
+            try { ridePersonality = JSON.parse(ridePersonality); } catch (e) { }
+        }
+        if (typeof savedPlaces === 'string') {
+            try { savedPlaces = JSON.parse(savedPlaces); } catch (e) { }
+        }
+
+        if (name) user.name = name;
+        if (email) user.email = email;
+        if (phone) user.phone = phone;
+
+        // Update Passenger Specifics
+        if (ridePersonality) user.ridePersonality = ridePersonality;
+        if (savedPlaces) user.savedPlaces = savedPlaces;
+
+        await user.save();
+
+        const updatedUser = user.toObject();
+        delete updatedUser.password;
+
+        return sendSuccess(res, 200, 'Profile updated successfully', updatedUser);
+    } catch (error) {
+        console.error('UpdateProfile error:', error);
+        return sendError(res, 500, `Profile update failed: ${error.message}`);
+    }
+};
+
+
