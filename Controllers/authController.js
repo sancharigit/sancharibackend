@@ -164,12 +164,23 @@ export const login = async (req, res) => {
             return sendError(res, 400, 'Please provide (email or phone) and password');
         }
 
-        const normalizedRole = role?.toLowerCase() || 'passenger';
         const query = {
-            ...(email ? { email } : { phone }),
-            role: normalizedRole
+            ...(email ? { email } : { phone })
         };
-        const user = await User.findOne(query);
+
+        if (role) {
+            query.role = role.toLowerCase();
+        }
+
+        let user = await User.findOne(query);
+
+        // Fallback: If no role was specified and no user was found with default 'passenger' logic,
+        // try to find the user by identifier only (this helps admins or users with specific roles)
+        if (!user && !role) {
+            user = await User.findOne({
+                ...(email ? { email } : { phone })
+            });
+        }
         console.log("user found", user)
 
         if (!user) {
