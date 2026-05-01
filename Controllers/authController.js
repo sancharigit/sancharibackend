@@ -5,7 +5,7 @@ import User from '../Models/User.js';
 import { sendSMS, sendPersonalizedSMS } from '../Utils/smsService.js';
 import { sendWhatsAppOTP } from '../Utils/whatsappService.js';
 
-const googleClient = new OAuth2Client('197183880790-71av0ri5ibs7beab34kqj9qkjfv4tr1j.apps.googleusercontent.com');
+const googleClient = new OAuth2Client('909296510785-e3a279afthh5br10j180ie4lidh9ucp2.apps.googleusercontent.com');
 
 // ─── Helper ────────────────────────────────────────────────────
 const generateToken = (id) =>

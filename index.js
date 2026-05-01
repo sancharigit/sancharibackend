@@ -31,8 +31,8 @@ app.get('/', (req, res) => {
 
 // ─── Network Test Route ────────────────────────────────────────
 app.get('/test', (req, res) => {
-    res.json({ 
-        success: true, 
+    res.json({
+        success: true,
         message: 'Network connection successful! 🚀',
         ip: req.ip,
         time: new Date().toISOString()
