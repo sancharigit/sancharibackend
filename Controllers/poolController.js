@@ -1,6 +1,80 @@
 import Ride from '../Models/Ride.js';
 import User from '../Models/User.js';
 import Wallet from '../Models/Wallet.js';
+import PromotedRoute from '../Models/PromotedRoute.js';
+import Message from '../Models/Message.js';
+
+// ─── 9. GET /api/pools/:id/messages ─────────────────────
+// Get chat messages for a specific pool trip
+export const getPoolMessages = async (req, res) => {
+    try {
+        const pool = await Ride.findById(req.params.id);
+        if (!pool) return res.status(404).json({ success: false, message: 'Pool ride not found' });
+
+        // Verify user is either host or passenger
+        const isPassenger = pool.passengers.some(p => p.user.toString() === req.user._id.toString());
+        const isHost = pool.host.toString() === req.user._id.toString();
+
+        if (!isPassenger && !isHost) {
+            return res.status(403).json({ success: false, message: 'Not authorized' });
+        }
+
+        const messages = await Message.find({ pool: req.params.id }).sort({ createdAt: 1 });
+        return res.json({ success: true, data: messages });
+    } catch (error) {
+        console.error('getPoolMessages error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch messages' });
+    }
+};
+
+// ─── 10. POST /api/pools/:id/messages ────────────────────
+// Send a chat message for a specific pool trip
+export const sendPoolMessage = async (req, res) => {
+    try {
+        const { text } = req.body;
+        if (!text || !text.trim()) {
+            return res.status(400).json({ success: false, message: 'Message text is required' });
+        }
+
+        const pool = await Ride.findById(req.params.id);
+        if (!pool) return res.status(404).json({ success: false, message: 'Pool ride not found' });
+
+        const isPassenger = pool.passengers.some(p => p.user.toString() === req.user._id.toString());
+        const isHost = pool.host.toString() === req.user._id.toString();
+
+        if (!isPassenger && !isHost) {
+            return res.status(403).json({ success: false, message: 'Not authorized to send messages' });
+        }
+
+        const message = await Message.create({
+            pool: req.params.id,
+            sender: req.user._id,
+            text: text.trim(),
+        });
+
+        return res.status(201).json({ success: true, data: message });
+    } catch (error) {
+        console.error('sendPoolMessage error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to send message' });
+    }
+};
+
+// ─── 8. GET /api/pools/promoted ─────────────────────────
+// Get promoted routes for weekend escapes, etc.
+// @access Public
+export const getPromotedRoutes = async (req, res) => {
+    try {
+        const { category } = req.query;
+        let query = { isActive: true };
+        if (category) query.category = category;
+
+        const routes = await PromotedRoute.find(query).sort({ createdAt: -1 });
+        return res.status(200).json({ success: true, count: routes.length, data: routes });
+    } catch (error) {
+        console.error('getPromotedRoutes error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch promoted routes' });
+    }
+};
 
 // ─── 1. POST /api/pools/publish ─────────────────────────
 // Driver publishes a new pool (City, Outstation, Rental)
@@ -79,8 +153,8 @@ export const publishRide = async (req, res) => {
 // @access Private (Passenger)
 export const searchRides = async (req, res) => {
     try {
-        const { type, date, fromCoords, toCoords } = req.query; // 'local', 'outstation', 'intercity', 'date'
-        
+        const { type, date, fromCoords, toCoords, fromName, toName } = req.query; // 'local', 'outstation', 'intercity', 'date'
+
         // Find rides that are upcoming, have seats, and optionally match the type filter
         let query = {
             status: 'scheduled',
@@ -97,22 +171,26 @@ export const searchRides = async (req, res) => {
             query.scheduledTime = { $gte: new Date() };
         }
 
-        if (fromCoords) {
+        if (fromCoords && fromCoords.includes(',')) {
             const [lng, lat] = fromCoords.split(',').map(Number);
             query["origin.location"] = {
                 $geoWithin: {
                     $centerSphere: [[lng, lat], 10 / 6378.1] // 10km radius
                 }
             };
+        } else if (fromName) {
+            query["origin.name"] = { $regex: fromName, $options: 'i' };
         }
 
-        if (toCoords) {
+        if (toCoords && toCoords.includes(',')) {
             const [lng, lat] = toCoords.split(',').map(Number);
             query["destination.location"] = {
                 $geoWithin: {
                     $centerSphere: [[lng, lat], 20 / 6378.1] // 20km radius
                 }
             };
+        } else if (toName) {
+            query["destination.name"] = { $regex: toName, $options: 'i' };
         }
 
         const normalizedType = type ? type.toLowerCase() : null;
@@ -149,6 +227,7 @@ export const bookSeat = async (req, res) => {
     try {
         const { seats = 1, paymentMethod = 'razorpay' } = req.body;
         const rideId = req.params.id;
+        console.log("ssss", seats, paymentMethod, rideId)
 
         // ── Cash NOT allowed for pooling ──────────────────────────────────────────────────────────
         // Outstation pooling and all Ride pools require Razorpay payment.
@@ -162,8 +241,9 @@ export const bookSeat = async (req, res) => {
         // ──────────────────────────────────────────────────────────────────────
 
         const ride = await Ride.findById(rideId);
+        console.log("ride", ride)
         if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
-        
+
         if (ride.availableSeats < seats) {
             return res.status(400).json({ success: false, message: `Only ${ride.availableSeats} seats available` });
         }
@@ -178,19 +258,23 @@ export const bookSeat = async (req, res) => {
             return res.status(400).json({ success: false, message: 'You have already booked a seat on this ride' });
         }
 
-        // ── Wallet balance check (Pre-verification) ──────────────────────────────
-        // We check balance at booking to ensure the passenger can afford the trip,
-        // but we only deduct the funds after ride completion per latest requirements.
+        // ── Wallet balance deduction (Immediate) ──────────────────────────────
         const totalAmount = seats * ride.pricePerSeat;
         const passengerUser = await User.findById(req.user._id);
         if (!passengerUser) return res.status(404).json({ success: false, message: 'Passenger not found' });
-        if ((passengerUser.walletBalance || 0) < totalAmount) {
-            return res.status(402).json({
-                success: false,
-                message: `Insufficient wallet balance. You need ₹${totalAmount} but have ₹${passengerUser.walletBalance || 0}. Please top up your wallet.`
-            });
+
+        if (paymentMethod === 'wallet') {
+            if ((passengerUser.walletBalance || 0) < totalAmount) {
+                return res.status(402).json({
+                    success: false,
+                    message: `Insufficient wallet balance. You need ₹${totalAmount} but have ₹${passengerUser.walletBalance || 0}.`
+                });
+            }
+
+            // Deduct immediately
+            passengerUser.walletBalance -= totalAmount;
+            await passengerUser.save();
         }
-        // No immediate deduction here anymore. It moves to updatePoolStatus.
         // ────────────────────────────────────────────────────────────────────────────
 
         // Deduct seats and push to manifest
@@ -203,9 +287,9 @@ export const bookSeat = async (req, res) => {
             user: req.user._id,
             seatsBooked: seats,
             otp: pickupOtp,
-            paymentMethod: 'wallet',
+            paymentMethod: paymentMethod,
             bookingStatus: 'confirmed',
-            paymentStatus: 'pending', // Payment will be 'paid' after ride completion
+            paymentStatus: paymentMethod === 'wallet' ? 'paid' : 'pending',
         });
         await ride.save();
 
@@ -216,7 +300,7 @@ export const bookSeat = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            message: 'Seat reserved. Payment will be deducted after ride completion.',
+            message: paymentMethod === 'wallet' ? 'Booking confirmed and payment deducted from wallet.' : 'Seat reserved successfully.',
             otp: pickupOtp,
             estimatedFare: totalAmount,
             walletBalance: passengerUser.walletBalance,
@@ -251,13 +335,13 @@ export const getDriverPools = async (req, res) => {
 export const getPassengerPools = async (req, res) => {
     try {
         // Query rides where this user ID is inside the passengers array AND their booking is not cancelled
-        const rides = await Ride.find({ 
-            passengers: { 
-                $elemMatch: { 
-                    user: req.user._id, 
-                    bookingStatus: { $ne: 'cancelled' } 
-                } 
-            } 
+        const rides = await Ride.find({
+            passengers: {
+                $elemMatch: {
+                    user: req.user._id,
+                    bookingStatus: { $ne: 'cancelled' }
+                }
+            }
         })
             .populate('host', 'name phone profileImage driverDetails')
             .sort({ scheduledTime: -1 });
@@ -276,9 +360,9 @@ export const updatePoolStatus = async (req, res) => {
     try {
         const { status } = req.body;
         const validStatuses = ['scheduled', 'ongoing', 'completed', 'cancelled'];
-        
+
         if (!validStatuses.includes(status)) {
-             return res.status(400).json({ success: false, message: 'Invalid status' });
+            return res.status(400).json({ success: false, message: 'Invalid status' });
         }
 
         const ride = await Ride.findById(req.params.id);
@@ -351,7 +435,7 @@ export const updatePoolStatus = async (req, res) => {
                             description: `Pool Earning (Ride ID: ${ride._id.toString().slice(-6).toUpperCase()}) - 0% Fee`,
                             referenceId: ride._id
                         });
-                    } 
+                    }
                     p.bookingStatus = 'completed';
                     p.paymentStatus = 'completed';
                 }
@@ -384,16 +468,16 @@ export const cancelBooking = async (req, res) => {
             const passengerId = p.user?._id || p.user;
             return passengerId && passengerId.toString() === req.user._id.toString() && p.bookingStatus !== 'cancelled';
         });
-        
+
         if (passengerIndex === -1) {
             return res.status(400).json({ success: false, message: 'Active booking not found for this user' });
         }
 
         const booking = ride.passengers[passengerIndex];
-        
+
         // Restore seats
         ride.availableSeats += booking.seatsBooked;
-        
+
         // Update status and reason
         booking.bookingStatus = 'cancelled';
         booking.cancellationReason = cancellationReason || 'No reason provided';
@@ -404,5 +488,23 @@ export const cancelBooking = async (req, res) => {
     } catch (error) {
         console.error('cancelBooking error:', error);
         return res.status(500).json({ success: false, message: 'Failed to cancel booking' });
+    }
+};
+
+export const markPoolMessagesAsRead = async (req, res) => {
+    try {
+        const pool = await Ride.findById(req.params.id);
+        if (!pool) return res.status(404).json({ success: false, message: 'Pool not found' });
+        const now = new Date();
+        const isHost = pool.host.toString() === req.user._id.toString();
+        const passengerIndex = pool.passengers.findIndex(p => p.user.toString() === req.user._id.toString());
+        if (isHost) pool.lastReadByHost = now;
+        else if (passengerIndex !== -1) pool.passengers[passengerIndex].lastReadAt = now;
+        else return res.status(403).json({ success: false, message: 'Not authorized' });
+        await pool.save();
+        return res.json({ success: true, message: 'Pool messages marked as read', lastReadAt: now });
+    } catch (error) {
+        console.error('markPoolMessagesAsRead error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to mark as read' });
     }
 };

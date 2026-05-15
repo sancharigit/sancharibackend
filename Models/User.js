@@ -41,6 +41,8 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    fcmToken: { type: String, default: null }, // For push notifications
+    isActive: { type: Boolean, default: true },
 
     ratings: {
       average: { type: Number, default: 0 },
@@ -84,7 +86,11 @@ const userSchema = new mongoose.Schema(
       currentLocation: {
         type: { type: String, enum: ["Point"], default: "Point" },
         coordinates: { type: [Number], default: [0, 0], index: "2dsphere" },
+        heading: { type: Number, default: 0 }, // 0-360 degrees
+        speed: { type: Number, default: 0 },   // km/h
       },
+      isAvailable: { type: Boolean, default: true }, // false when on an active ride
+      totalRides: { type: Number, default: 0 },
 
       ratings: {
         average: { type: Number, default: 0 },

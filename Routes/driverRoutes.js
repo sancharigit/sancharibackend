@@ -2,13 +2,15 @@
 import express from 'express';
 import { protect, driverOnly } from '../Middleware/authMiddleware.js';
 import upload from '../Utils/multer.js';
-import { 
-    getDriverProfile, 
-    updateDriverProfile, 
+import {
+    getDriverProfile,
+    updateDriverProfile,
     toggleOnline,
     uploadDocument,
     getOnlineDrivers,
-    getEarnings
+    getEarnings,
+    updateLocation,
+    addVehicle
 } from '../Controllers/driverController.js';
 
 const router = express.Router();
@@ -18,8 +20,10 @@ const router = express.Router();
 
 // Routes
 router.get('/profile', protect, driverOnly, getDriverProfile);
-router.put('/profile', protect, driverOnly, updateDriverProfile);
-router.post('/status', protect, driverOnly, toggleOnline);
+router.patch('/profile', protect, driverOnly, updateDriverProfile);
+router.patch('/status', protect, driverOnly, toggleOnline);
+router.post('/vehicle', protect, driverOnly, addVehicle);
+router.patch('/location', protect, driverOnly, updateLocation);
 router.get('/online', protect, getOnlineDrivers);
 router.get('/earnings', protect, driverOnly, getEarnings);
 

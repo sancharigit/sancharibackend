@@ -1,5 +1,6 @@
 import express from 'express';
 import { protect, adminOnly } from '../Middleware/authMiddleware.js';
+import upload from '../Utils/multer.js';
 import { 
     getDrivers, 
     verifyDriver, 
@@ -18,7 +19,10 @@ import {
     getAllTransactions,
     getDriverRides,
     getWithdrawals,
-    updateWithdrawalStatus
+    updateWithdrawalStatus,
+    addPromotedRoute,
+    getPromotedRoutesAdmin,
+    deletePromotedRoute
 } from '../Controllers/adminController.js';
 
 const router = express.Router();
@@ -44,5 +48,10 @@ router.get('/rides', getAllRides);
 router.get('/rides/:id', getRideById);
 router.get('/withdrawals', getWithdrawals);
 router.put('/withdrawals/:id', updateWithdrawalStatus);
+
+// Promoted Routes
+router.post('/promoted-routes', upload.single('image'), addPromotedRoute);
+router.get('/promoted-routes', getPromotedRoutesAdmin);
+router.delete('/promoted-routes/:id', deletePromotedRoute);
 
 export default router;

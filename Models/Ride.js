@@ -30,7 +30,7 @@ const rideSchema = new mongoose.Schema(
           default: "Point",
         },
         coordinates: {
-          type: [Number], 
+          type: [Number],
           required: true,
         },
       },
@@ -53,8 +53,8 @@ const rideSchema = new mongoose.Schema(
 
     route: {
       polyline: { type: String },
-      distance: { type: Number }, 
-      duration: { type: Number }, 
+      distance: { type: Number },
+      duration: { type: Number },
     },
 
     scheduledTime: {
@@ -86,13 +86,13 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    
+
     seatPricing: {
       front: { type: Number },
       middle: { type: Number },
       back: { type: Number },
     },
-    
+
     passengers: [
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

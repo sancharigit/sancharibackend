@@ -31,15 +31,15 @@ router.use(protect);
 // POST   /api/bookings/:id/accept    → Driver accepts a ride
 // PUT    /api/bookings/:id/status    → Update status (arrived/ongoing/completed/cancelled)
 
-router.post('/request',         requestRide);
-router.get('/nearby',           getNearbyRides);
-router.get('/active',           getActiveRide);
-router.get('/history',          getRideHistory);
-router.get('/:id',              getBookingById);
-router.post('/:id/accept',      acceptRide);
-router.put('/:id/status',       updateRideStatus);
-router.post('/:id/rate',        rateRide);
-router.get('/:id/messages',     getMessages);
-router.post('/:id/messages',    sendMessage);
+router.post('/request', requestRide);
+router.get('/nearby', getNearbyRides);
+router.get('/active', getActiveRide);
+router.get('/history', getRideHistory);
+router.get('/:id', getBookingById);
+router.post('/:id/accept', acceptRide);
+router.put('/:id/status', updateRideStatus);
+router.post('/:id/rate', rateRide);
+router.get('/:id/messages', getMessages);
+router.post('/:id/messages', sendMessage);
 
 export default router;

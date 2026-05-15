@@ -14,6 +14,8 @@ router.post('/verify-otp', verifyOTP); // POST /api/auth/verify-otp
 router.post('/google', googleLogin);  // POST /api/auth/google
 
 // Protected routes
+// router.post('/logout', protect, logout);       // POST /api/auth/logout
+// router.post('/refresh-token', refreshToken);   // POST /api/auth/refresh-token
 router.get('/me', protect, getMe);    // GET  /api/auth/me
 router.put('/profile', protect, upload.single('profileImage'), updateProfile); // PUT  /api/auth/profile
 

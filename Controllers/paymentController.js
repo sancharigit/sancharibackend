@@ -39,6 +39,31 @@ export const createOrder = async (req, res) => {
     }
 };
 
+// @desc    Only verify payment signature without wallet update
+// @route   POST /api/payments/onlyVerify
+// @access  Private
+export const onlyverifyPayment = async (req, res) => {
+    try {
+        const { razorpay_order_id, razorpay_payment_id, razorpay_signature, amount } = req.body;
+       
+        const sha = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
+        sha.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+        const digest = sha.digest("hex");
+
+        if (digest !== razorpay_signature) {
+            return res.status(400).json({ success: false, message: "Transaction is not legit!" });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Payment successfully verified",
+        });
+    } catch (error) {
+        console.error("Payment Verification Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 // @desc    Validate payment and add to wallet
 // @route   POST /api/payments/verify
 // @access  Private
@@ -63,12 +88,12 @@ export const verifyPayment = async (req, res) => {
         }
 
         user.walletBalance = (user.walletBalance || 0) + amount;
-        
+
         // Quick workaround for driver earnings, keeping both balanced
         if (user.role === 'driver') {
-             user.driverDetails.earnings = (user.driverDetails.earnings || 0) + amount;
+            user.driverDetails.earnings = (user.driverDetails.earnings || 0) + amount;
         }
-        
+
         await user.save();
 
         // Log transaction in Wallet model
@@ -76,7 +101,7 @@ export const verifyPayment = async (req, res) => {
         if (!wallet) {
             wallet = await Wallet.create({ user: userId, balance: user.walletBalance });
         }
-        
+
         wallet.balance = user.walletBalance;
         wallet.transactions.push({
             type: 'credit',
@@ -108,6 +133,7 @@ export const verifyPayment = async (req, res) => {
 // @access  Private (Passenger)
 export const createRidePaymentOrder = async (req, res) => {
     try {
+        console.log(req.body);
         const { amount, rideId, seats = 1 } = req.body;
         if (!amount || amount <= 0) {
             return res.status(400).json({ success: false, message: 'Valid amount is required' });
@@ -145,17 +171,19 @@ export const verifyRidePayment = async (req, res) => {
             rideId,          // Ride._id for pool bookings
             seats = 1,
         } = req.body;
-
+        console.log("iiii", req.body)
         // ─── 1. Verify Razorpay signature ───────────────────────────────────
         const sha = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET);
         sha.update(`${razorpay_order_id}|${razorpay_payment_id}`);
         const digest = sha.digest('hex');
+        console.log("payment verification", digest, razorpay_signature);
         if (digest !== razorpay_signature) {
             return res.status(400).json({ success: false, message: 'Payment verification failed. Invalid signature.' });
         }
 
         // ─── 2. Deduct passenger wallet ───────────────────────────────────
         const passenger = await User.findById(req.user._id);
+        console.log("payment verification", passenger);
         if (!passenger) return res.status(404).json({ success: false, message: 'User not found' });
 
         passenger.walletBalance = (passenger.walletBalance || 0) - amount;

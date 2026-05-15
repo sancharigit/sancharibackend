@@ -3,6 +3,7 @@ import Booking from '../Models/Booking.js';
 import Ride from '../Models/Ride.js';
 import Wallet from '../Models/Wallet.js';
 import Withdrawal from '../Models/Withdrawal.js';
+import PromotedRoute from '../Models/PromotedRoute.js';
 
 // Get list of drivers (with filter for pending/verified)
 export const getDrivers = async (req, res) => {
@@ -44,14 +45,14 @@ export const verifyDriver = async (req, res) => {
             driver.rejectionReason = ""; // Clear rejection reason on approval
             driver.verificationStatus = {
                 email: true,
-                phone: true, 
+                phone: true,
                 idCard: true,
                 communityTrusted: true
             };
             driver.driverDetails.isOnline = false;
             await driver.save();
             return res.json({ success: true, message: 'Driver approved successfully', data: driver });
-            
+
         } else if (action === 'reject') {
             const { rejectionReason } = req.body;
             driver.driverApprovalStatus = 'rejected';
@@ -74,10 +75,10 @@ export const verifyDriver = async (req, res) => {
 export const getPassengers = async (req, res) => {
     try {
         console.log(`Admin ${req.user.email} fetching passengers...`);
-        const passengers = await User.find({ 
-            role: { $regex: /^passenger$/i } 
+        const passengers = await User.find({
+            role: { $regex: /^passenger$/i }
         }).select('-password');
-        
+
         console.log(`Found ${passengers.length} passengers.`);
         res.json({ success: true, count: passengers.length, data: passengers });
     } catch (error) {
@@ -113,7 +114,7 @@ export const getPassengerRides = async (req, res) => {
         const rides = await Booking.find({ passenger: id })
             .populate('driver', 'name phone profileImage')
             .sort({ createdAt: -1 });
-            
+
         res.json({ success: true, data: rides });
     } catch (error) {
         console.error(error);
@@ -125,15 +126,15 @@ export const getPassengerRides = async (req, res) => {
 export const getPassengerTransactions = async (req, res) => {
     try {
         const { id } = req.params;
-        
+
         // For now, transactions are inferred from completed or paid bookings. 
         // We'll return bookings that have a finalFare > 0.
-        const rides = await Booking.find({ 
-            passenger: id, 
+        const rides = await Booking.find({
+            passenger: id,
             status: { $in: ['completed', 'cancelled'] } // cancelled might have cancellation fees later
         })
-        .populate('driver', 'name')
-        .sort({ createdAt: -1 });
+            .populate('driver', 'name')
+            .sort({ createdAt: -1 });
 
         const transactions = rides.map(ride => {
             const isRefund = ride.status === 'cancelled' && ride.paymentStatus === 'completed'; // basic logic
@@ -161,7 +162,7 @@ export const getDashboardStats = async (req, res) => {
         const totalPassengers = await User.countDocuments({ role: { $regex: /^passenger$/i } });
         const totalDrivers = await User.countDocuments({ role: { $regex: /^driver$/i } });
         const activeDrivers = await User.countDocuments({ role: { $regex: /^driver$/i }, driverApprovalStatus: 'approved' });
-        
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const newRegistrationsToday = await User.countDocuments({ createdAt: { $gte: today } });
@@ -169,15 +170,17 @@ export const getDashboardStats = async (req, res) => {
         // Revenue stats
         const revenueStats = await Booking.aggregate([
             { $match: { status: 'completed' } },
-            { $group: {
-                _id: null,
-                totalRevenue: { $sum: '$finalFare' },
-                todayRevenue: { 
-                    $sum: { 
-                        $cond: [{ $gte: ['$createdAt', today] }, '$finalFare', 0] 
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: '$finalFare' },
+                    todayRevenue: {
+                        $sum: {
+                            $cond: [{ $gte: ['$createdAt', today] }, '$finalFare', 0]
+                        }
                     }
                 }
-            }}
+            }
         ]);
 
         // Pooling stats
@@ -188,15 +191,17 @@ export const getDashboardStats = async (req, res) => {
         const poolRevenueStats = await Ride.aggregate([
             { $unwind: '$passengers' },
             { $match: { 'passengers.bookingStatus': { $in: ['confirmed', 'completed'] } } },
-            { $group: {
-                _id: null,
-                totalRevenue: { $sum: { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] } },
-                todayRevenue: {
-                    $sum: {
-                        $cond: [{ $gte: ['$createdAt', today] }, { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] }, 0]
+            {
+                $group: {
+                    _id: null,
+                    totalRevenue: { $sum: { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] } },
+                    todayRevenue: {
+                        $sum: {
+                            $cond: [{ $gte: ['$createdAt', today] }, { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] }, 0]
+                        }
                     }
                 }
-            }}
+            }
         ]);
 
         const totalRevenue = (revenueStats[0]?.totalRevenue || 0) + (poolRevenueStats[0]?.totalRevenue || 0);
@@ -228,22 +233,26 @@ export const getFinancialOverview = async (req, res) => {
     try {
         const stats = await Booking.aggregate([
             { $match: { status: 'completed' } },
-            { $group: {
-                _id: null,
-                totalCollection: { $sum: '$finalFare' },
-                totalCommission: { $sum: 0 }, // 0% commission
-                totalPayouts: { $sum: '$finalFare' }
-            }}
+            {
+                $group: {
+                    _id: null,
+                    totalCollection: { $sum: '$finalFare' },
+                    totalCommission: { $sum: 0 }, // 0% commission
+                    totalPayouts: { $sum: '$finalFare' }
+                }
+            }
         ]);
 
         // Aggregate pooling revenue similarly for financial overview
         const poolStats = await Ride.aggregate([
             { $unwind: '$passengers' },
             { $match: { 'passengers.bookingStatus': { $in: ['confirmed', 'completed'] } } },
-            { $group: {
-                _id: null,
-                totalCollection: { $sum: { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] } }
-            }}
+            {
+                $group: {
+                    _id: null,
+                    totalCollection: { $sum: { $multiply: ['$passengers.seatsBooked', '$pricePerSeat'] } }
+                }
+            }
         ]);
 
         const rideData = stats[0] || { totalCollection: 0, totalCommission: 0, totalPayouts: 0 };
@@ -252,13 +261,15 @@ export const getFinancialOverview = async (req, res) => {
         const totalCollection = rideData.totalCollection + poolData.totalCollection;
         const totalCommission = 0; // Standard 0% Commission
         const totalPayouts = totalCollection;
-        
-        res.json({ success: true, data: {
-            totalCollection,
-            totalCommission,
-            totalPayouts,
-            netProfit: totalCommission
-        }});
+
+        res.json({
+            success: true, data: {
+                totalCollection,
+                totalCommission,
+                totalPayouts,
+                netProfit: totalCommission
+            }
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
@@ -270,15 +281,15 @@ export const getDriverWallets = async (req, res) => {
     try {
         const drivers = await User.find({ role: { $regex: /^driver$/i } }).select('name _id walletBalance driverDetails.earnings');
         console.log(`Admin fetching driver wallets, found: ${drivers.length}`);
-        
+
         const wallets = drivers.map(d => ({
             driverId: d._id,
             driverName: d.name,
             balance: d.walletBalance || 0,
             totalEarned: d.driverDetails?.earnings || 0,
-            commissionDue: 0 
+            commissionDue: 0
         }));
-        
+
         res.json({ success: true, count: wallets.length, data: wallets });
     } catch (error) {
         console.error('getDriverWallets error:', error);
@@ -291,14 +302,14 @@ export const getPassengerWallets = async (req, res) => {
     try {
         const passengers = await User.find({ role: { $regex: /^passenger$/i } }).select('name _id walletBalance phone');
         console.log(`Admin fetching passenger wallets, found: ${passengers.length}`);
-        
+
         const wallets = passengers.map(p => ({
             passengerId: p._id,
             passengerName: p.name,
             phone: p.phone,
             balance: p.walletBalance || 0
         }));
-        
+
         res.json({ success: true, count: wallets.length, data: wallets });
     } catch (error) {
         console.error('getPassengerWallets error:', error);
@@ -392,9 +403,9 @@ export const getAllTransactions = async (req, res) => {
     try {
         // Fetch all wallets and their transactions
         const wallets = await Wallet.find().populate('user', 'name phone role');
-        
+
         let allTransactions = [];
-        
+
         wallets.forEach(wallet => {
             if (wallet.user) {
                 const userTransactions = wallet.transactions.map(tx => ({
@@ -407,10 +418,10 @@ export const getAllTransactions = async (req, res) => {
                 allTransactions = [...allTransactions, ...userTransactions];
             }
         });
-        
+
         // Sort by timestamp descending
         allTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        
+
         // Return latest 100 for now
         res.json({ success: true, count: allTransactions.length, data: allTransactions.slice(0, 100) });
     } catch (error) {
@@ -454,9 +465,9 @@ export const getDriverRides = async (req, res) => {
         if (status && status !== 'all') {
             poolQuery.status = status;
         }
-        
+
         const pools = await Ride.find(poolQuery).sort({ createdAt: -1 });
-        
+
         // Transform pools for consistent output
         const formattedPools = pools.map(p => ({
             id: p._id,
@@ -485,7 +496,7 @@ export const handleRefundAction = async (req, res) => {
     try {
         const { id } = req.params;
         const { action } = req.body;
-        
+
         res.json({ success: true, message: `Refund ${id} ${action}ed (Mocked)` });
     } catch (error) {
         console.error(error);
@@ -538,7 +549,7 @@ export const updateWithdrawalStatus = async (req, res) => {
         if (status === 'approved' || status === 'completed') {
             // Check if we already deducted (To prevent double deduction if calling twice)
             if (withdrawal.processedAt) {
-                 return res.status(400).json({ success: false, message: 'Withdrawal already processed and deducted' });
+                return res.status(400).json({ success: false, message: 'Withdrawal already processed and deducted' });
             }
 
             if (driver.walletBalance < withdrawal.amount) {
@@ -561,7 +572,7 @@ export const updateWithdrawalStatus = async (req, res) => {
                 referenceId: id
             });
             await wallet.save();
-            
+
             withdrawal.status = 'completed'; // Ensure final state is completed
             withdrawal.processedAt = new Date();
         }
@@ -576,6 +587,47 @@ export const updateWithdrawalStatus = async (req, res) => {
         res.json({ success: true, message: `Withdrawal ${status} successfully and wallet updated`, data: withdrawal });
     } catch (error) {
         console.error('updateWithdrawalStatus error:', error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// --- Promoted Routes Management ---
+
+export const addPromotedRoute = async (req, res) => {
+    try {
+        const { name, startingPrice, category, pickup, destination } = req.body;
+        let image = req.body.image;
+
+        if (req.file) {
+            // Using the base URL from env or fallback to local
+            const baseUrl = process.env.BASE_URL;
+            image = `${baseUrl}/uploads/${req.file.filename}`;
+        }
+
+        const route = await PromotedRoute.create({ name, startingPrice, category, image, pickup, destination });
+        res.status(201).json({ success: true, data: route });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const getPromotedRoutesAdmin = async (req, res) => {
+    try {
+        const routes = await PromotedRoute.find().sort({ createdAt: -1 });
+        res.json({ success: true, count: routes.length, data: routes });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const deletePromotedRoute = async (req, res) => {
+    try {
+        await PromotedRoute.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'Route deleted successfully' });
+    } catch (error) {
+        console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };

@@ -2,6 +2,7 @@ import Booking from '../Models/Booking.js';
 import User from '../Models/User.js';
 import Message from '../Models/Message.js';
 import Wallet from '../Models/Wallet.js';
+import { emitToDrivers, emitToPassenger } from '../socket.js';
 
 // ─────────────────────────────────────────────────────────
 // Helper: Calculate a basic fare estimate
@@ -9,9 +10,9 @@ import Wallet from '../Models/Wallet.js';
 // ─────────────────────────────────────────────────────────
 const estimateFare = (distanceKm, durationMins, vehicleType = 'CAR') => {
     const rates = {
-        CAR:  { base: 50, perKm: 12, perMin: 1.5 },
-        AUTO: { base: 30, perKm: 9,  perMin: 1.0 },
-        BIKE: { base: 20, perKm: 6,  perMin: 0.8 },
+        CAR: { base: 50, perKm: 12, perMin: 1.5 },
+        AUTO: { base: 30, perKm: 9, perMin: 1.0 },
+        BIKE: { base: 20, perKm: 6, perMin: 0.8 },
     };
     const r = rates[vehicleType] || rates.CAR;
     return Math.round(r.base + distanceKm * r.perKm + durationMins * r.perMin);
@@ -33,7 +34,7 @@ export const requestRide = async (req, res) => {
         // Robust Mapping: Convert frontend types to backend enums
         if (rideType === 'INSTANT') rideType = 'city';
         if (rideType === 'POOLING') rideType = 'pool';
-        
+
         const v = String(vehicleType || '').toUpperCase();
         if (v.includes('CAR')) vehicleType = 'CAR';
         else if (v.includes('AUTO')) vehicleType = 'AUTO';
@@ -91,26 +92,49 @@ export const requestRide = async (req, res) => {
         // ──────────────────────────────────────────────────────────────────────────────
 
         const booking = await Booking.create({
-            passenger:     req.user._id,
-            pickup:        { address: pickupAddress,  coordinates: pickupCoords  },
-            dropoff:       { address: dropoffAddress, coordinates: dropoffCoords },
-            rideType:      rideType     || 'city',
-            vehicleType:   vehicleType  || 'CAR',
-            seats:         seats        || 1,
-            distanceKm:    distanceKm   || 0,
-            durationMins:  durationMins || 0,
+            passenger: req.user._id,
+            pickup: { address: pickupAddress, coordinates: pickupCoords },
+            dropoff: { address: dropoffAddress, coordinates: dropoffCoords },
+            rideType: rideType || 'city',
+            vehicleType: vehicleType || 'CAR',
+            seats: seats || 1,
+            distanceKm: distanceKm || 0,
+            durationMins: durationMins || 0,
             estimatedFare: estFare,
-            offeredFare:   offeredFare  || estFare,
-            finalFare:     finalCalculatedFare,
+            offeredFare: offeredFare || estFare,
+            finalFare: finalCalculatedFare,
             paymentMethod: 'wallet', // Always wallet — cash not accepted
         });
+
+        // ─── 1. Find nearby drivers (5km) ───────────────
+        const nearbyDrivers = await User.find({
+            role: 'driver',
+            'driverDetails.isOnline': true,
+            'driverDetails.vehicle.type': vehicleType,
+            'driverDetails.currentLocation.coordinates': {
+                $near: {
+                    $geometry: { type: "Point", coordinates: pickupCoords },
+                    $maxDistance: 5000 // 5km
+                }
+            }
+        }).select('_id');
+
+        const driverIds = nearbyDrivers.map(d => d._id);
+
+        // ─── 2. Update booking with notified drivers ─────
+        booking.notifiedDrivers = driverIds;
+        await booking.save();
+
+        // ─── 3. Emit Socket.IO event to drivers ──────────
+        const populatedBooking = await booking.populate('passenger', 'name profileImage ratings');
+        emitToDrivers(driverIds, 'newRideRequest', populatedBooking);
 
         return res.status(201).json({ success: true, message: 'Ride requested successfully', data: booking });
 
     } catch (error) {
         console.error('requestRide error:', error);
-        return res.status(500).json({ 
-            success: false, 
+        return res.status(500).json({
+            success: false,
             message: 'Failed to request ride',
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
@@ -209,8 +233,8 @@ export const acceptRide = async (req, res) => {
             return res.status(409).json({ success: false, message: 'You already have an active ride' });
         }
 
-        booking.driver     = req.user._id;
-        booking.status     = 'accepted';
+        booking.driver = req.user._id;
+        booking.status = 'accepted';
         booking.acceptedAt = new Date();
         // Generate a 4-digit OTP for the ride
         booking.otp = Math.floor(1000 + Math.random() * 9000).toString();
@@ -218,8 +242,25 @@ export const acceptRide = async (req, res) => {
 
         const populated = await booking.populate([
             { path: 'passenger', select: 'name phone profileImage' },
-            { path: 'driver',    select: 'name phone profileImage driverDetails' },
+            { path: 'driver', select: 'name phone profileImage driverDetails' },
         ]);
+
+        // ─── Socket Notifications ────────────────────────
+        // 1. Notify Passenger
+        emitToPassenger(booking.passenger, 'rideAccepted', {
+            bookingId: booking._id,
+            driver: {
+                name: populated.driver.name,
+                phone: populated.driver.phone,
+                profileImage: populated.driver.profileImage,
+                vehicle: populated.driver.driverDetails.vehicle,
+                ratings: populated.driver.driverDetails.ratings
+            }
+        });
+
+        // 2. Notify other drivers that the ride is gone
+        const otherDriverIds = booking.notifiedDrivers.filter(id => id.toString() !== req.user._id.toString());
+        emitToDrivers(otherDriverIds, 'rideExpired', { rideId: booking._id });
 
         return res.json({ success: true, message: 'Ride accepted', data: populated });
     } catch (error) {
@@ -233,7 +274,7 @@ export const acceptRide = async (req, res) => {
 // @access Private (Driver or Passenger)
 export const updateRideStatus = async (req, res) => {
     try {
-        const { status, cancellationReason, otp } = req.body || {};
+        const { status, cancellationReason, otp, paymentMethod, paymentStatus } = req.body || {};
 
         const VALID_TRANSITIONS = {
             driver: {
@@ -242,7 +283,7 @@ export const updateRideStatus = async (req, res) => {
                 arrived: ['ongoing', 'cancelled'],
                 ongoing: ['completed', 'cancelled']
             },
-            passenger: { 
+            passenger: {
                 pending: ['cancelled'],
                 accepted: ['cancelled'],
                 arrived: ['cancelled'],
@@ -255,7 +296,7 @@ export const updateRideStatus = async (req, res) => {
         if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
         // Determine caller role
-        const isDriver    = booking.driver    && booking.driver.toString()    === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver.toString() === req.user._id.toString();
         const isPassenger = booking.passenger && booking.passenger.toString() === req.user._id.toString();
 
         if (!isDriver && !isPassenger) {
@@ -263,9 +304,18 @@ export const updateRideStatus = async (req, res) => {
         }
 
         const role = isDriver ? 'driver' : 'passenger';
-        const allowed = VALID_TRANSITIONS[role][booking.status] || [];
-        if (!allowed.includes(status)) {
-            return res.status(400).json({ success: false, message: `Cannot move from '${booking.status}' to '${status}' as ${role}` });
+
+        // IDEMPOTENCY: If the status is already what is requested, just return success
+        // UNLESS we are also updating payment details
+        if (booking.status === status && !paymentStatus && !paymentMethod) {
+            return res.json({ success: true, message: `Ride is already in '${status}' state`, data: booking });
+        }
+
+        if (booking.status !== status) {
+            const allowed = VALID_TRANSITIONS[role][booking.status] || [];
+            if (!allowed.includes(status)) {
+                return res.status(400).json({ success: false, message: `Cannot move from '${booking.status}' to '${status}' as ${role}` });
+            }
         }
 
         if (status === 'completed' && isDriver) {
@@ -273,11 +323,11 @@ export const updateRideStatus = async (req, res) => {
                 return res.status(400).json({ success: false, message: 'Trip must be ongoing before it can be completed' });
             }
         }
-        
+
         // Apply status and relevant timestamp
         booking.status = status;
         const now = new Date();
-        if (status === 'arrived')    booking.arrivedAt   = now;
+        if (status === 'arrived') booking.arrivedAt = now;
         if (status === 'ongoing') {
             // Require OTP if the driver is starting the ride
             if (isDriver) {
@@ -299,14 +349,16 @@ export const updateRideStatus = async (req, res) => {
                 booking.completedAt = now;
             }
 
-            // Set paymentStatus to completed if the PASSENGER is the one updating
-            // This ensures the ride remains "active" for the passenger until they finish the payment screen.
-            if (isPassenger) {
+            // Set paymentStatus to completed/paid if provided or if the PASSENGER is the one updating
+            if (paymentStatus) booking.paymentStatus = paymentStatus;
+            if (paymentMethod) booking.paymentMethod = paymentMethod;
+
+            if (isPassenger && !paymentStatus) {
                 booking.paymentStatus = 'completed';
             }
 
             // Wallet Accounting: ONLY proceed if payment is confirmed and hasn't been processed yet
-            if (booking.paymentStatus === 'completed' && !booking.earningsProcessed) {
+            if (['completed', 'paid'].includes(booking.paymentStatus) && !booking.earningsProcessed) {
                 const totalAmount = booking.finalFare || booking.offeredFare || 0;
 
                 // 1. Deduct from passenger wallet
@@ -345,7 +397,7 @@ export const updateRideStatus = async (req, res) => {
                     } else {
                         driverWallet.balance += driverNetEarning;
                     }
-                    
+
                     driverWallet.transactions.push({
                         type: 'credit',
                         amount: driverNetEarning,
@@ -356,13 +408,13 @@ export const updateRideStatus = async (req, res) => {
                 }
 
                 // Mark as processed to prevent double-charging/double-payouts
-                booking.earningsProcessed = true; 
+                booking.earningsProcessed = true;
             }
         }
 
         if (status === 'cancelled') {
-            booking.cancelledAt        = now;
-            booking.cancelledBy        = role;
+            booking.cancelledAt = now;
+            booking.cancelledBy = role;
             booking.cancellationReason = cancellationReason || '';
         }
 
@@ -381,7 +433,7 @@ export const updateRideStatus = async (req, res) => {
 export const getActiveRide = async (req, res) => {
     try {
         const isDriver = req.user.role === 'driver';
-        
+
         // Drivers: Finished with ride as soon as status is 'completed'
         // Passengers: Ride stays active until paymentStatus is 'completed'
         const DRIVER_ACTIVE_STATUS = ['pending', 'accepted', 'arrived', 'ongoing'];
@@ -465,7 +517,7 @@ export const rateRide = async (req, res) => {
         }
 
         const isPassenger = booking.passenger.toString() === req.user._id.toString();
-        const isDriver    = booking.driver && booking.driver.toString() === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver.toString() === req.user._id.toString();
 
         if (!isPassenger && !isDriver) {
             return res.status(403).json({ success: false, message: 'Not authorized to rate this ride' });
@@ -493,7 +545,7 @@ export const rateRide = async (req, res) => {
                     const count = prev.count + 1;
                     const avg = ((prev.average * prev.count) + rating) / count;
                     driver.driverDetails.ratings = { average: Math.round(avg * 10) / 10, count };
-                    
+
                     await driver.save();
                 }
             }
@@ -534,7 +586,7 @@ export const getBookingById = async (req, res) => {
         if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
         const isPassenger = booking.passenger && booking.passenger._id.toString() === req.user._id.toString();
-        const isDriver    = booking.driver && booking.driver._id.toString() === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver._id.toString() === req.user._id.toString();
 
         if (!isPassenger && !isDriver) {
             return res.status(403).json({ success: false, message: 'Not authorized' });
@@ -566,7 +618,7 @@ export const getMessages = async (req, res) => {
         if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
         const isPassenger = booking.passenger.toString() === req.user._id.toString();
-        const isDriver    = booking.driver && booking.driver.toString() === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver.toString() === req.user._id.toString();
 
         if (!isPassenger && !isDriver) {
             return res.status(403).json({ success: false, message: 'Not authorized' });
@@ -594,7 +646,7 @@ export const sendMessage = async (req, res) => {
         if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
         const isPassenger = booking.passenger.toString() === req.user._id.toString();
-        const isDriver    = booking.driver && booking.driver.toString() === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver.toString() === req.user._id.toString();
 
         if (!isPassenger && !isDriver) {
             return res.status(403).json({ success: false, message: 'Not authorized to send messages' });
@@ -610,5 +662,23 @@ export const sendMessage = async (req, res) => {
     } catch (error) {
         console.error('sendMessage error:', error);
         return res.status(500).json({ success: false, message: 'Failed to send message' });
+    }
+};
+
+export const markMessagesAsRead = async (req, res) => {
+    try {
+        const booking = await Booking.findById(req.params.id);
+        if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+        const now = new Date();
+        const isPassenger = booking.passenger.toString() === req.user._id.toString();
+        const isDriver = booking.driver && booking.driver.toString() === req.user._id.toString();
+        if (isPassenger) booking.lastReadByPassenger = now;
+        else if (isDriver) booking.lastReadByDriver = now;
+        else return res.status(403).json({ success: false, message: 'Not authorized' });
+        await booking.save();
+        return res.json({ success: true, message: 'Messages marked as read', lastReadAt: now });
+    } catch (error) {
+        console.error('markMessagesAsRead error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to mark as read' });
     }
 };

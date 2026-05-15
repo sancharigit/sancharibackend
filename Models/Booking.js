@@ -20,12 +20,12 @@ const bookingSchema = new mongoose.Schema(
 
     // ─── Locations ─────────────────────────────────────
     pickup: {
-      address:     { type: String, required: true },
+      address: { type: String, required: true },
       coordinates: { type: [Number], required: true }, // [lng, lat]
     },
 
     dropoff: {
-      address:     { type: String, required: true },
+      address: { type: String, required: true },
       coordinates: { type: [Number], required: true },
     },
 
@@ -43,6 +43,7 @@ const bookingSchema = new mongoose.Schema(
     },
 
     seats: { type: Number, default: 1 },
+    polyline: { type: String, default: null }, // Encoded route polyline
 
     // ─── Status Lifecycle ──────────────────────────────
     // pending → accepted → arrived → ongoing → completed
@@ -53,49 +54,55 @@ const bookingSchema = new mongoose.Schema(
       default: 'pending',
     },
 
-    cancelledBy:        { type: String, enum: ['passenger', 'driver', 'system'] },
+    cancelledBy: { type: String, enum: ['passenger', 'driver', 'system'] },
     cancellationReason: { type: String },
 
     // ─── Fare ──────────────────────────────────────────
     estimatedFare: { type: Number, default: 0 },
-    offeredFare:   { type: Number, default: 0 }, // Custom bid by passenger
-    finalFare:     { type: Number, default: 0 }, // Agreed/charged fare
+    offeredFare: { type: Number, default: 0 }, // Custom bid by passenger
+    finalFare: { type: Number, default: 0 }, // Agreed/charged fare
 
-    distanceKm:   { type: Number, default: 0 },
+    distanceKm: { type: Number, default: 0 },
     durationMins: { type: Number, default: 0 },
-    otp:          { type: String }, // 4-digit OTP to start ride
+    otp: { type: String }, // 4-digit OTP to start ride
+    otpAttempts: { type: Number, default: 0 },
+    isOtpUsed: { type: Boolean, default: false },
     earningsProcessed: { type: Boolean, default: false },
 
     // ─── Payment ───────────────────────────────────────
     paymentMethod: {
       type: String,
-      enum: ['cash', 'wallet'],
+      enum: ['cash', 'wallet', 'GATEWAY'],
       default: 'cash',
     },
     paymentStatus: {
       type: String,
-      enum: ['pending', 'completed'],
+      enum: ['pending', 'completed', 'paid', 'failed'],
       default: 'pending',
     },
 
     // ─── Timestamps ────────────────────────────────────
-    acceptedAt:   { type: Date },
-    arrivedAt:    { type: Date },
-    startedAt:    { type: Date },
-    completedAt:  { type: Date },
-    cancelledAt:  { type: Date },
+    acceptedAt: { type: Date },
+    arrivedAt: { type: Date },
+    startedAt: { type: Date },
+    completedAt: { type: Date },
+    cancelledAt: { type: Date },
 
     // ─── Ratings ───────────────────────────────────────
     ratingByPassenger: {
-      rating:  { type: Number, min: 1, max: 5 },
+      rating: { type: Number, min: 1, max: 5 },
       comment: { type: String },
       givenAt: { type: Date },
     },
     ratingByDriver: {
-      rating:  { type: Number, min: 1, max: 5 },
+      rating: { type: Number, min: 1, max: 5 },
       comment: { type: String },
       givenAt: { type: Date },
     },
+
+    // ─── Driver Tracking ───────────────────────────────
+    notifiedDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    rejectedByDrivers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   },
   { timestamps: true }
 );

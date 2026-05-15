@@ -7,7 +7,10 @@ import {
     getDriverPools,
     getPassengerPools,
     updatePoolStatus,
-    cancelBooking
+    cancelBooking,
+    getPromotedRoutes,
+    getPoolMessages,
+    sendPoolMessage
 } from '../Controllers/poolController.js';
 
 const router = express.Router();
@@ -21,6 +24,7 @@ router.use(protect);
 // GET    /api/pools/history      → Get pools passenger has joined
 
 router.get('/search', searchRides);
+router.get('/promoted', getPromotedRoutes);
 router.post('/:id/book', bookSeat);
 router.get('/history', getPassengerPools);
 router.put('/:id/cancel-booking', cancelBooking);
@@ -32,5 +36,7 @@ router.put('/:id/cancel-booking', cancelBooking);
 router.post('/publish', driverOnly, publishRide);
 router.get('/driver-history', driverOnly, getDriverPools);
 router.put('/:id/status', driverOnly, updatePoolStatus);
+router.get('/:id/messages', getPoolMessages);
+router.post('/:id/messages', sendPoolMessage);
 
 export default router;
