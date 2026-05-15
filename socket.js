@@ -2,8 +2,8 @@ import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { authenticateSocket } from './Middleware/authMiddleware.js';
 import { redisClient, redisPub, redisSub, keys, channels } from './redis.js';
-import driverLocationService from './Services/DriverLocationService.js';
-import rideService from './Services/RideService.js';
+import driverLocationService from './services/driverLocationService.js';
+import rideService from './services/rideService.js';
 import Driver from './Models/Driver.js';
 import Booking from './Models/Booking.js';
 import logger from './logger.js';
@@ -30,7 +30,7 @@ class SocketServer {
 
     // Redis adapter for horizontal scaling
     if (redisClient.status === 'ready') {
-        this.io.adapter(createAdapter(redisPub, redisSub));
+      this.io.adapter(createAdapter(redisPub, redisSub));
     }
 
     // Authentication middleware
@@ -294,23 +294,23 @@ export const initSocket = (httpServer) => socketServer.initialize(httpServer);
 
 // Convenience exports for controllers
 export const emitToDrivers = (targetIds, event, data) => {
-    if (!socketServer.io) return;
+  if (!socketServer.io) return;
 
-    if (Array.isArray(targetIds)) {
-        // Notify specific drivers
-        targetIds.forEach(id => {
-            socketServer.io.to(`user:${id.toString()}`).emit(event, data);
-        });
-    } else {
-        // Broadcast to all online drivers
-        socketServer.io.to('drivers').emit(targetIds, event); // In this case targetIds is the event
-    }
+  if (Array.isArray(targetIds)) {
+    // Notify specific drivers
+    targetIds.forEach(id => {
+      socketServer.io.to(`user:${id.toString()}`).emit(event, data);
+    });
+  } else {
+    // Broadcast to all online drivers
+    socketServer.io.to('drivers').emit(targetIds, event); // In this case targetIds is the event
+  }
 };
 
 export const emitToPassenger = (passengerId, event, data) => {
-    if (socketServer.io) {
-        socketServer.io.to(`user:${passengerId}`).emit(event, data);
-    }
+  if (socketServer.io) {
+    socketServer.io.to(`user:${passengerId}`).emit(event, data);
+  }
 };
 
 export default socketServer;

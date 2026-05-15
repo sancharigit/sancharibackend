@@ -1,5 +1,5 @@
-import rideService from '../services/RideService.js';
-import driverLocationService from '../services/DriverLocationService.js';
+import rideService from '../services/rideService.js';
+import driverLocationService from '../services/driverLocationService.js';
 import Ride from '../Models/Ride.js';
 import AppError from '../Utils/AppError.js';
 
@@ -84,10 +84,10 @@ export const getRideDetails = async (req, res, next) => {
  */
 export const getActiveRide = async (req, res, next) => {
   try {
-    const query = req.user.role === 'passenger' 
+    const query = req.user.role === 'passenger'
       ? { passengerId: req.user._id, status: { $nin: ['completed', 'cancelled'] } }
       : { driverId: req.user._id, status: { $nin: ['completed', 'cancelled'] } };
-    
+
     const ride = await Ride.findOne(query)
       .populate('passengerId', 'name phone profileImage')
       .populate('driverId', 'name phone profileImage');
