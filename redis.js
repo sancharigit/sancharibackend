@@ -9,7 +9,7 @@ const redisConfig = {
         const delay = Math.min(times * 50, 2000);
         return delay;
     },
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null,
     lazyConnect: true,
 };
 
