@@ -22,7 +22,10 @@ import {
     updateWithdrawalStatus,
     addPromotedRoute,
     getPromotedRoutesAdmin,
-    deletePromotedRoute
+    deletePromotedRoute,
+    addOffer,
+    getOffersAdmin,
+    deleteOffer
 } from '../Controllers/adminController.js';
 
 const router = express.Router();
@@ -53,5 +56,10 @@ router.put('/withdrawals/:id', updateWithdrawalStatus);
 router.post('/promoted-routes', upload.single('image'), addPromotedRoute);
 router.get('/promoted-routes', getPromotedRoutesAdmin);
 router.delete('/promoted-routes/:id', deletePromotedRoute);
+
+// Offers Management
+router.post('/offers', addOffer);
+router.get('/offers', getOffersAdmin);
+router.delete('/offers/:id', deleteOffer);
 
 export default router;

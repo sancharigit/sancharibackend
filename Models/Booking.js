@@ -62,6 +62,9 @@ const bookingSchema = new mongoose.Schema(
     offeredFare: { type: Number, default: 0 }, // Custom bid by passenger
     finalFare: { type: Number, default: 0 }, // Agreed/charged fare
 
+    isScheduled: { type: Boolean, default: false },
+    scheduledAt: { type: Date },
+
     distanceKm: { type: Number, default: 0 },
     durationMins: { type: Number, default: 0 },
     otp: { type: String }, // 4-digit OTP to start ride

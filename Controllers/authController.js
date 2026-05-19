@@ -4,6 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import User from '../Models/User.js';
 import { sendSMS, sendPersonalizedSMS } from '../Utils/smsService.js';
 import { sendWhatsAppOTP } from '../Utils/whatsappService.js';
+import Booking from '../Models/Booking.js';
 
 const googleClient = new OAuth2Client('909296510785-e3a279afthh5br10j180ie4lidh9ucp2.apps.googleusercontent.com');
 
@@ -475,7 +476,7 @@ export const updateProfile = async (req, res) => {
     }
 
     // 2. Handle Text Fields
-    let { name, email, phone, ridePersonality, savedPlaces } = req.body;
+    let { name, email, phone, ridePersonality, savedPlaces, emergencyContact } = req.body;
 
     // If using form-data, arrays/objects might arrive as strings
     if (typeof ridePersonality === 'string') {
@@ -493,6 +494,13 @@ export const updateProfile = async (req, res) => {
     if (ridePersonality) user.ridePersonality = ridePersonality;
     if (savedPlaces) user.savedPlaces = savedPlaces;
 
+    if (emergencyContact) {
+      if (typeof emergencyContact === 'string') {
+        try { emergencyContact = JSON.parse(emergencyContact); } catch (e) { }
+      }
+      user.emergencyContact = emergencyContact;
+    }
+
     await user.save();
 
     const updatedUser = user.toObject();
@@ -502,6 +510,72 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     console.error('UpdateProfile error:', error);
     return sendError(res, 500, `Profile update failed: ${error.message}`);
+  }
+};
+
+// ─── @route  GET /api/auth/locations/history ─────────────────────
+// @desc   Get user's saved, recent, and most visited locations
+// @access Private
+export const getLocationHistory = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Get Saved Places from User Profile
+    const user = await User.findById(userId).select('savedPlaces');
+    const savedPlaces = user?.savedPlaces || [];
+
+    // 2. Get Recent Places from Bookings
+    const recentBookings = await Booking.find({ passenger: userId })
+      .sort({ createdAt: -1 })
+      .limit(20) // Fetch a pool to extract distinct ones
+      .select('dropoff');
+
+    const recentMap = new Map();
+    recentBookings.forEach((booking) => {
+      if (booking.dropoff && booking.dropoff.address) {
+        if (!recentMap.has(booking.dropoff.address)) {
+          recentMap.set(booking.dropoff.address, {
+            name: booking.dropoff.address.split(',')[0],
+            address: booking.dropoff.address,
+            coordinates: booking.dropoff.coordinates,
+            type: 'recent'
+          });
+        }
+      }
+    });
+    // Take top 3 distinct recent places
+    const recentPlaces = Array.from(recentMap.values()).slice(0, 3);
+
+    // 3. Get Most Visited Places from Bookings via Aggregation
+    const mostVisitedResult = await Booking.aggregate([
+      { $match: { passenger: userId } },
+      {
+        $group: {
+          _id: "$dropoff.address",
+          count: { $sum: 1 },
+          coordinates: { $first: "$dropoff.coordinates" }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 3 }
+    ]);
+
+    const mostVisitedPlaces = mostVisitedResult.map(item => ({
+      name: item._id.split(',')[0],
+      address: item._id,
+      coordinates: item.coordinates,
+      count: item.count,
+      type: 'most_visited'
+    }));
+
+    return sendSuccess(res, 200, 'Location history fetched successfully', {
+      savedPlaces,
+      recentPlaces,
+      mostVisitedPlaces
+    });
+  } catch (error) {
+    console.error('GetLocationHistory error:', error);
+    return sendError(res, 500, `Failed to fetch location history: ${error.message}`);
   }
 };
 

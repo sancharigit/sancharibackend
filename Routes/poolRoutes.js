@@ -9,6 +9,7 @@ import {
     updatePoolStatus,
     cancelBooking,
     getPromotedRoutes,
+    getOffers,
     getPoolMessages,
     sendPoolMessage
 } from '../Controllers/poolController.js';
@@ -25,6 +26,7 @@ router.use(protect);
 
 router.get('/search', searchRides);
 router.get('/promoted', getPromotedRoutes);
+router.get('/offers', getOffers);
 router.post('/:id/book', bookSeat);
 router.get('/history', getPassengerPools);
 router.put('/:id/cancel-booking', cancelBooking);

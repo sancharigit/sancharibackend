@@ -28,7 +28,8 @@ export const requestRide = async (req, res) => {
             dropoffAddress, dropoffCoords,
             rideType, vehicleType, seats,
             distanceKm, durationMins,
-            offeredFare, paymentMethod
+            offeredFare, paymentMethod,
+            isScheduled, scheduledAt
         } = req.body || {};
 
         // Robust Mapping: Convert frontend types to backend enums
@@ -45,13 +46,16 @@ export const requestRide = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Pickup and dropoff details are required' });
         }
 
-        // Block if passenger already has an active ride
-        const existingActive = await Booking.findOne({
-            passenger: req.user._id,
-            status: { $in: ['pending', 'accepted', 'arrived', 'ongoing'] }
-        });
-        if (existingActive) {
-            return res.status(409).json({ success: false, message: 'You already have an active ride', data: { bookingId: existingActive._id } });
+        // Block if passenger already has an active ride (only check for active instant/on-demand rides)
+        if (!isScheduled) {
+            const existingActive = await Booking.findOne({
+                passenger: req.user._id,
+                isScheduled: { $ne: true },
+                status: { $in: ['pending', 'accepted', 'arrived', 'ongoing'] }
+            });
+            if (existingActive) {
+                return res.status(409).json({ success: false, message: 'You already have an active ride', data: { bookingId: existingActive._id } });
+            }
         }
 
         // ─── Vehicle Eligibility by Distance ─────────────────────────────────
@@ -104,30 +108,37 @@ export const requestRide = async (req, res) => {
             offeredFare: offeredFare || estFare,
             finalFare: finalCalculatedFare,
             paymentMethod: 'wallet', // Always wallet — cash not accepted
+            isScheduled: isScheduled || false,
+            scheduledAt: scheduledAt || null,
         });
 
-        // ─── 1. Find nearby drivers (5km) ───────────────
-        const nearbyDrivers = await User.find({
-            role: 'driver',
-            'driverDetails.isOnline': true,
-            'driverDetails.vehicle.type': vehicleType,
-            'driverDetails.currentLocation.coordinates': {
-                $near: {
-                    $geometry: { type: "Point", coordinates: pickupCoords },
-                    $maxDistance: 5000 // 5km
+        // ─── 1. Find nearby drivers (5km) (Skip for scheduled rides) ───────────────
+        let driverIds = [];
+        if (!isScheduled) {
+            const nearbyDrivers = await User.find({
+                role: 'driver',
+                'driverDetails.isOnline': true,
+                'driverDetails.vehicle.type': vehicleType,
+                'driverDetails.currentLocation.coordinates': {
+                    $near: {
+                        $geometry: { type: "Point", coordinates: pickupCoords },
+                        $maxDistance: 5000 // 5km
+                    }
                 }
-            }
-        }).select('_id');
+            }).select('_id');
 
-        const driverIds = nearbyDrivers.map(d => d._id);
+            driverIds = nearbyDrivers.map(d => d._id);
+        }
 
         // ─── 2. Update booking with notified drivers ─────
         booking.notifiedDrivers = driverIds;
         await booking.save();
 
-        // ─── 3. Emit Socket.IO event to drivers ──────────
-        const populatedBooking = await booking.populate('passenger', 'name profileImage ratings');
-        emitToDrivers(driverIds, 'newRideRequest', populatedBooking);
+        // ─── 3. Emit Socket.IO event to drivers (Skip for scheduled rides) ──────────
+        if (!isScheduled) {
+            const populatedBooking = await booking.populate('passenger', 'name profileImage ratings');
+            emitToDrivers(driverIds, 'newRideRequest', populatedBooking);
+        }
 
         return res.status(201).json({ success: true, message: 'Ride requested successfully', data: booking });
 
@@ -167,7 +178,8 @@ export const getNearbyRides = async (req, res) => {
         const query = {
             status: 'pending',
             driver: null,
-            vehicleType: driverVehicleType  // ← enforced from driver's own profile
+            vehicleType: driverVehicleType, // ← enforced from driver's own profile
+            isScheduled: { $ne: true }
         };
         // ──────────────────────────────────────────────────────────────────────
 
@@ -440,8 +452,8 @@ export const getActiveRide = async (req, res) => {
         const PASSENGER_ACTIVE_STATUS = ['pending', 'accepted', 'arrived', 'ongoing', 'completed'];
 
         const query = isDriver
-            ? { driver: req.user._id, status: { $in: DRIVER_ACTIVE_STATUS } }
-            : { passenger: req.user._id, status: { $in: PASSENGER_ACTIVE_STATUS }, paymentStatus: 'pending' };
+            ? { driver: req.user._id, isScheduled: { $ne: true }, status: { $in: DRIVER_ACTIVE_STATUS } }
+            : { passenger: req.user._id, isScheduled: { $ne: true }, status: { $in: PASSENGER_ACTIVE_STATUS }, paymentStatus: 'pending' };
 
         const booking = await Booking.findOne(query)
             .populate('passenger', 'name phone profileImage ridePersonality')
@@ -476,7 +488,7 @@ export const getRideHistory = async (req, res) => {
 
         const query = req.user.role === 'driver'
             ? { driver: req.user._id, status: { $in: ['completed', 'cancelled'] } }
-            : { passenger: req.user._id, status: { $in: ['completed', 'cancelled'] } };
+            : { passenger: req.user._id };
 
         const [rides, total] = await Promise.all([
             Booking.find(query)

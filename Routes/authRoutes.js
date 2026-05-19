@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, getMe, googleLogin, verifyOTP, whatsappLogin, updateProfile } from '../Controllers/authController.js';
+import { register, login, getMe, googleLogin, verifyOTP, whatsappLogin, updateProfile, getLocationHistory } from '../Controllers/authController.js';
 import { protect } from '../Middleware/authMiddleware.js';
 import upload from '../Utils/multer.js';
 
@@ -18,6 +18,7 @@ router.post('/google', googleLogin);  // POST /api/auth/google
 // router.post('/refresh-token', refreshToken);   // POST /api/auth/refresh-token
 router.get('/me', protect, getMe);    // GET  /api/auth/me
 router.put('/profile', protect, upload.single('profileImage'), updateProfile); // PUT  /api/auth/profile
+router.get('/locations/history', protect, getLocationHistory); // GET /api/auth/locations/history
 
 export default router;
 

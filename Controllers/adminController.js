@@ -4,6 +4,7 @@ import Ride from '../Models/Ride.js';
 import Wallet from '../Models/Wallet.js';
 import Withdrawal from '../Models/Withdrawal.js';
 import PromotedRoute from '../Models/PromotedRoute.js';
+import Offer from '../Models/Offer.js';
 
 // Get list of drivers (with filter for pending/verified)
 export const getDrivers = async (req, res) => {
@@ -626,6 +627,39 @@ export const deletePromotedRoute = async (req, res) => {
     try {
         await PromotedRoute.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: 'Route deleted successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// --- Offers Management ---
+
+export const addOffer = async (req, res) => {
+    try {
+        const { title, description, badge, actionText, targetScreen } = req.body;
+        const offer = await Offer.create({ title, description, badge, actionText, targetScreen });
+        res.status(201).json({ success: true, data: offer });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const getOffersAdmin = async (req, res) => {
+    try {
+        const offers = await Offer.find().sort({ createdAt: -1 });
+        res.json({ success: true, count: offers.length, data: offers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const deleteOffer = async (req, res) => {
+    try {
+        await Offer.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'Offer deleted successfully' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });

@@ -2,6 +2,7 @@ import Ride from '../Models/Ride.js';
 import User from '../Models/User.js';
 import Wallet from '../Models/Wallet.js';
 import PromotedRoute from '../Models/PromotedRoute.js';
+import Offer from '../Models/Offer.js';
 import Message from '../Models/Message.js';
 
 // ─── 9. GET /api/pools/:id/messages ─────────────────────
@@ -73,6 +74,19 @@ export const getPromotedRoutes = async (req, res) => {
     } catch (error) {
         console.error('getPromotedRoutes error:', error);
         return res.status(500).json({ success: false, message: 'Failed to fetch promoted routes' });
+    }
+};
+
+// GET /api/pools/offers
+// Get active recommended offers
+// @access Private (Passenger)
+export const getOffers = async (req, res) => {
+    try {
+        const offers = await Offer.find({ isActive: true }).sort({ createdAt: -1 });
+        return res.status(200).json({ success: true, count: offers.length, data: offers });
+    } catch (error) {
+        console.error('getOffers error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to fetch offers' });
     }
 };
 

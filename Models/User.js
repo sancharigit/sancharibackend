@@ -138,6 +138,11 @@ const userSchema = new mongoose.Schema(
       co2Saved: { type: Number, default: 18 }, // Default for demo
     },
 
+    emergencyContact: {
+      name: { type: String, default: "" },
+      phone: { type: String, default: "" },
+    },
+
     isBlocked: { type: Boolean, default: false },
     rejectionReason: { type: String, default: "" },
 
