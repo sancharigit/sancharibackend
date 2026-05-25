@@ -8,23 +8,38 @@ const promotedRouteSchema = new mongoose.Schema(
     },
     startingPrice: {
       type: Number,
-      required: true,
     },
     image: {
       type: String, // URL to image
     },
     category: {
       type: String,
-      enum: ["weekend_escape", "trending", "popular"],
-      default: "weekend_escape",
+      enum: ["weekend_escape", "trending", "popular", "trending_route", "trending_now"],
+      default: "trending_route",
     },
     pickup: {
       type: String,
-      required: true,
     },
     destination: {
       type: String,
-      required: true,
+    },
+    subtitle: {
+      type: String,
+    },
+    discount: {
+      type: String,
+    },
+    tag: {
+      type: String,
+    },
+    duration: {
+      type: String,
+    },
+    rating: {
+      type: String,
+    },
+    seats: {
+      type: Number,
     },
     isActive: {
       type: Boolean,

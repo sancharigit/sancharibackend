@@ -1,6 +1,7 @@
 import Withdrawal from '../Models/Withdrawal.js';
 import User from '../Models/User.js';
 import Wallet from '../Models/Wallet.js';
+import Offer from '../Models/Offer.js';
 
 // @desc    Request withdrawal (Drivers only)
 // @route   POST /api/wallet/withdraw
@@ -78,11 +79,15 @@ export const getMyWallet = async (req, res) => {
             wallet = await Wallet.create({ user: userId, balance: user.walletBalance || 0 });
         }
 
+        // Fetch active offers to display on the mobile app wallet/payment screen
+        const offers = await Offer.find({ isActive: true }).sort({ createdAt: -1 });
+
         res.status(200).json({
             success: true,
             balance: user.walletBalance,
             hasPending: !!hasPending,
-            transactions: wallet.transactions.sort((a,b) => b.timestamp - a.timestamp)
+            transactions: wallet.transactions.sort((a,b) => b.timestamp - a.timestamp),
+            offers
         });
     } catch (error) {
         console.error("Get Wallet Error:", error);

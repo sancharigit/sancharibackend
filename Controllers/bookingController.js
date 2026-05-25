@@ -74,7 +74,9 @@ export const requestRide = async (req, res) => {
         // For city rides, use the base calculation.
         // For outstation/rental, trust the offeredFare from the frontend (which is based on driver's per/km rate)
         let estFare;
-        if (rideType === 'city') {
+        if (rideType === 'pool') {
+            estFare = Math.round((distanceKm || 5) * 12);
+        } else if (rideType === 'city') {
             estFare = estimateFare(distanceKm || 5, durationMins || 15, vehicleType);
         } else {
             estFare = offeredFare || estimateFare(distanceKm || 5, durationMins || 15, vehicleType);

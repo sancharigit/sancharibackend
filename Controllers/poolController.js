@@ -105,7 +105,8 @@ export const publishRide = async (req, res) => {
             totalSeats,
             pricePerSeat,
             seatPricing,
-            preferences
+            preferences,
+            route
         } = req.body;
 
         if (!originName || !destinationName || !scheduledTime || !totalSeats || !pricePerSeat) {
@@ -149,7 +150,8 @@ export const publishRide = async (req, res) => {
             availableSeats: Number(totalSeats),
             pricePerSeat: Number(pricePerSeat),
             seatPricing: seatPricing || {},
-            preferences: preferences || {}
+            preferences: preferences || {},
+            route: route || {}
         });
 
         // Populate driver details immediately to return

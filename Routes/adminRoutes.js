@@ -22,9 +22,11 @@ import {
     updateWithdrawalStatus,
     addPromotedRoute,
     getPromotedRoutesAdmin,
+    updatePromotedRoute,
     deletePromotedRoute,
     addOffer,
     getOffersAdmin,
+    updateOffer,
     deleteOffer
 } from '../Controllers/adminController.js';
 
@@ -55,11 +57,13 @@ router.put('/withdrawals/:id', updateWithdrawalStatus);
 // Promoted Routes
 router.post('/promoted-routes', upload.single('image'), addPromotedRoute);
 router.get('/promoted-routes', getPromotedRoutesAdmin);
+router.put('/promoted-routes/:id', upload.single('image'), updatePromotedRoute);
 router.delete('/promoted-routes/:id', deletePromotedRoute);
 
 // Offers Management
 router.post('/offers', addOffer);
 router.get('/offers', getOffersAdmin);
+router.put('/offers/:id', updateOffer);
 router.delete('/offers/:id', deleteOffer);
 
 export default router;

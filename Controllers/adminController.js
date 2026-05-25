@@ -596,7 +596,7 @@ export const updateWithdrawalStatus = async (req, res) => {
 
 export const addPromotedRoute = async (req, res) => {
     try {
-        const { name, startingPrice, category, pickup, destination } = req.body;
+        const { name, startingPrice, category, pickup, destination, subtitle, discount, tag, duration, rating, seats } = req.body;
         let image = req.body.image;
 
         if (req.file) {
@@ -605,7 +605,7 @@ export const addPromotedRoute = async (req, res) => {
             image = `${baseUrl}/uploads/${req.file.filename}`;
         }
 
-        const route = await PromotedRoute.create({ name, startingPrice, category, image, pickup, destination });
+        const route = await PromotedRoute.create({ name, startingPrice, category, image, pickup, destination, subtitle, discount, tag, duration, rating, seats });
         res.status(201).json({ success: true, data: route });
     } catch (error) {
         console.error(error);
@@ -617,6 +617,29 @@ export const getPromotedRoutesAdmin = async (req, res) => {
     try {
         const routes = await PromotedRoute.find().sort({ createdAt: -1 });
         res.json({ success: true, count: routes.length, data: routes });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const updatePromotedRoute = async (req, res) => {
+    try {
+        const { name, startingPrice, category, pickup, destination, subtitle, discount, tag, duration, rating, seats } = req.body;
+        let updateData = { name, startingPrice, category, pickup, destination, subtitle, discount, tag, duration, rating, seats };
+        
+        if (req.file) {
+            const baseUrl = process.env.BASE_URL;
+            updateData.image = `${baseUrl}/uploads/${req.file.filename}`;
+        } else if (req.body.image) {
+            updateData.image = req.body.image; // Keep existing image if a URL is provided
+        }
+
+        const route = await PromotedRoute.findByIdAndUpdate(req.params.id, updateData, { new: true });
+        if (!route) {
+            return res.status(404).json({ success: false, message: 'Route not found' });
+        }
+        res.json({ success: true, data: route });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
@@ -637,8 +660,8 @@ export const deletePromotedRoute = async (req, res) => {
 
 export const addOffer = async (req, res) => {
     try {
-        const { title, description, badge, actionText, targetScreen } = req.body;
-        const offer = await Offer.create({ title, description, badge, actionText, targetScreen });
+        const { title, description, badge, actionText, targetScreen, pillText } = req.body;
+        const offer = await Offer.create({ title, description, badge, actionText, targetScreen, pillText });
         res.status(201).json({ success: true, data: offer });
     } catch (error) {
         console.error(error);
@@ -650,6 +673,20 @@ export const getOffersAdmin = async (req, res) => {
     try {
         const offers = await Offer.find().sort({ createdAt: -1 });
         res.json({ success: true, count: offers.length, data: offers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const updateOffer = async (req, res) => {
+    try {
+        const { title, description, badge, actionText, targetScreen, pillText } = req.body;
+        const offer = await Offer.findByIdAndUpdate(req.params.id, { title, description, badge, actionText, targetScreen, pillText }, { new: true });
+        if (!offer) {
+            return res.status(404).json({ success: false, message: 'Offer not found' });
+        }
+        res.json({ success: true, data: offer });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });

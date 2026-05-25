@@ -14,6 +14,10 @@ const offerSchema = new mongoose.Schema(
       type: String, // e.g., "CITY COMMUTE", "INTER-CITY"
       required: true,
     },
+    pillText: {
+      type: String,
+      default: "",
+    },
     actionText: {
       type: String, // e.g., "LEARN MORE", "CHECK AVAILABILITY"
       default: "LEARN MORE",
