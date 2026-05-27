@@ -661,7 +661,14 @@ export const deletePromotedRoute = async (req, res) => {
 export const addOffer = async (req, res) => {
     try {
         const { title, description, badge, actionText, targetScreen, pillText } = req.body;
-        const offer = await Offer.create({ title, description, badge, actionText, targetScreen, pillText });
+        let image = req.body.image;
+
+        if (req.file) {
+            const baseUrl = process.env.BASE_URL;
+            image = `${baseUrl}/uploads/${req.file.filename}`;
+        }
+
+        const offer = await Offer.create({ title, description, badge, actionText, targetScreen, pillText, image });
         res.status(201).json({ success: true, data: offer });
     } catch (error) {
         console.error(error);
@@ -682,7 +689,18 @@ export const getOffersAdmin = async (req, res) => {
 export const updateOffer = async (req, res) => {
     try {
         const { title, description, badge, actionText, targetScreen, pillText } = req.body;
-        const offer = await Offer.findByIdAndUpdate(req.params.id, { title, description, badge, actionText, targetScreen, pillText }, { new: true });
+        let updateData = { title, description, badge, actionText, targetScreen, pillText };
+
+        if (req.file) {
+            const baseUrl = process.env.BASE_URL;
+            updateData.image = `${baseUrl}/uploads/${req.file.filename}`;
+        } else if (req.body.image) {
+            updateData.image = req.body.image; // Keep existing image if a URL is provided
+        } else if (req.body.image === '') {
+            updateData.image = '';
+        }
+
+        const offer = await Offer.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (!offer) {
             return res.status(404).json({ success: false, message: 'Offer not found' });
         }

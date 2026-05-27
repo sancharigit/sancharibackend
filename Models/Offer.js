@@ -26,6 +26,9 @@ const offerSchema = new mongoose.Schema(
       type: String, // e.g., "Outstation", "Home", or empty
       default: "",
     },
+    image: {
+      type: String, // URL to image
+    },
     isActive: {
       type: Boolean,
       default: true,

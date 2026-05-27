@@ -61,9 +61,9 @@ router.put('/promoted-routes/:id', upload.single('image'), updatePromotedRoute);
 router.delete('/promoted-routes/:id', deletePromotedRoute);
 
 // Offers Management
-router.post('/offers', addOffer);
+router.post('/offers', upload.single('image'), addOffer);
 router.get('/offers', getOffersAdmin);
-router.put('/offers/:id', updateOffer);
+router.put('/offers/:id', upload.single('image'), updateOffer);
 router.delete('/offers/:id', deleteOffer);
 
 export default router;
