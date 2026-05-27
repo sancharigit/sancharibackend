@@ -4,7 +4,8 @@ import fs from 'fs';
 
 // Ensure uploads directory exists
 // const uploadDir = 'uploads';
-const uploadDir = path.resolve('/var/www/sanchari/uploads')
+// const uploadDir = path.resolve('/var/www/sanchari/uploads')
+const uploadDir = path.resolve('uploads')
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
