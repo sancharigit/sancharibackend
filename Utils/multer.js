@@ -3,9 +3,9 @@ import path from 'path';
 import fs from 'fs';
 
 // Ensure uploads directory exists
-// const uploadDir = 'uploads';
+const uploadDir = 'uploads';
 // const uploadDir = path.resolve('/var/www/sanchari/uploads')
-const uploadDir = path.resolve('uploads')
+// const uploadDir = path.resolve('uploads')
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -23,7 +23,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 20 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
         const filetypes = /jpeg|jpg|png|webp/;
         const mimetype = filetypes.test(file.mimetype);
