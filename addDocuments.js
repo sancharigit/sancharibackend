@@ -30,7 +30,7 @@ const addDocumentsToDriver = async () => {
     // Better: Set them to a placeholder image hosted online? 
     // The frontend code: `http://localhost:5000${v}`.
     // So if v is `https://placehold.co/600x400`, result is `http://localhost:5000https://placehold.co...` -> BROKEN.
-    
+
     // Use the actual file found in uploads for testing
     const realFile = '/uploads/driver-6996dd3c79f9c24551616f61-1771500400268.png';
 

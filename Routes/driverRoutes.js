@@ -10,7 +10,9 @@ import {
     getOnlineDrivers,
     getEarnings,
     updateLocation,
-    addVehicle
+    addVehicle,
+    getActiveDriverOffers,
+    getTripModeStats
 } from '../Controllers/driverController.js';
 
 const router = express.Router();
@@ -26,6 +28,8 @@ router.post('/vehicle', protect, driverOnly, addVehicle);
 router.patch('/location', protect, driverOnly, updateLocation);
 router.get('/online', protect, getOnlineDrivers);
 router.get('/earnings', protect, driverOnly, getEarnings);
+router.get('/offers', protect, driverOnly, getActiveDriverOffers);
+router.get('/trip-modes', protect, driverOnly, getTripModeStats);
 
 // Upload Route with Error Handling - Accessible by all roles for profile images
 router.post('/upload', protect, upload.single('document'), uploadDocument);

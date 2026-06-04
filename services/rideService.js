@@ -3,6 +3,9 @@ import Ride from '../Models/Ride.js';
 import RideOTP from '../Models/RideOTP.js';
 import RideHistory from '../Models/RideHistory.js';
 import Driver from '../Models/Driver.js';
+import DriverOffer from '../Models/DriverOffer.js';
+import User from '../Models/User.js';
+import Wallet from '../Models/Wallet.js';
 import { redisClient, keys, TTL } from '../redis.js';
 import AppError from '../Utils/AppError.js';
 import logger from '../logger.js';
@@ -248,10 +251,11 @@ class RideService {
   }
 
   async completeRide(ride) {
-    await Promise.all([
+    const [updatedDriver, historyResult] = await Promise.all([
       Driver.findOneAndUpdate(
         { userId: ride.driverId },
-        { isAvailable: true, currentRideId: null, $inc: { totalRides: 1 } }
+        { isAvailable: true, currentRideId: null, $inc: { totalRides: 1 } },
+        { new: true }
       ),
       RideHistory.create({
         rideId: ride._id,
@@ -269,6 +273,39 @@ class RideService {
     if (redisClient.status === 'ready') {
         await redisClient.del(keys.rideLock(ride._id.toString()));
         await redisClient.del(keys.rideAccepted(ride._id.toString()));
+    }
+
+    // Process Driver Offers
+    if (updatedDriver) {
+      try {
+          const activeOffers = await DriverOffer.find({ isActive: true });
+          for (const offer of activeOffers) {
+              if (offer.targetRides > 0 && updatedDriver.totalRides % offer.targetRides === 0) {
+                  const driverUser = await User.findById(ride.driverId);
+                  if (driverUser) {
+                      driverUser.walletBalance = (driverUser.walletBalance || 0) + offer.bonusAmount;
+                      await driverUser.save();
+
+                      let wallet = await Wallet.findOne({ user: ride.driverId });
+                      if (!wallet) {
+                          wallet = await Wallet.create({ user: ride.driverId, balance: driverUser.walletBalance });
+                      }
+                      wallet.balance = driverUser.walletBalance;
+                      wallet.transactions.push({
+                          type: 'credit',
+                          amount: offer.bonusAmount,
+                          description: `Bonus Trip: Completed ${offer.targetRides} rides (${offer.title})`,
+                          referenceId: ride._id
+                      });
+                      await wallet.save();
+                      
+                      logger.info(`Awarded ${offer.bonusAmount} bonus to driver ${ride.driverId} for offer ${offer.title}`);
+                  }
+              }
+          }
+      } catch (offerError) {
+          logger.error(`Failed to process driver offers: ${offerError.message}`);
+      }
     }
   }
 

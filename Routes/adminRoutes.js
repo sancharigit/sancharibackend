@@ -1,18 +1,20 @@
 import express from 'express';
 import { protect, adminOnly } from '../Middleware/authMiddleware.js';
 import upload from '../Utils/multer.js';
-import { 
-    getDrivers, 
-    verifyDriver, 
-    getPassengers, 
-    toggleBlockStatus, 
-    getPassengerRides, 
-    getPassengerTransactions, 
-    getDashboardStats, 
-    getFinancialOverview, 
-    getAllPools, 
-    getAllRides, 
-    getRideById, 
+import {
+    getDrivers,
+    getDriverByIdAdmin,
+    getDriverDocumentsAdmin,
+    verifyDriver,
+    getPassengers,
+    toggleBlockStatus,
+    getPassengerRides,
+    getPassengerTransactions,
+    getDashboardStats,
+    getFinancialOverview,
+    getAllPools,
+    getAllRides,
+    getRideById,
     getPoolById,
     getDriverWallets,
     getPassengerWallets,
@@ -27,7 +29,11 @@ import {
     addOffer,
     getOffersAdmin,
     updateOffer,
-    deleteOffer
+    deleteOffer,
+    addDriverOffer,
+    getDriverOffers,
+    updateDriverOffer,
+    deleteDriverOffer
 } from '../Controllers/adminController.js';
 
 const router = express.Router();
@@ -36,6 +42,8 @@ const router = express.Router();
 router.use(protect, adminOnly);
 
 router.get('/drivers', getDrivers);
+router.get('/drivers/:id', getDriverByIdAdmin);
+router.get('/drivers/:id/documents', getDriverDocumentsAdmin);
 router.get('/passengers', getPassengers);
 router.put('/passengers/:id/block', toggleBlockStatus);
 router.get('/passengers/:id/rides', getPassengerRides);
@@ -65,5 +73,11 @@ router.post('/offers', upload.single('image'), addOffer);
 router.get('/offers', getOffersAdmin);
 router.put('/offers/:id', upload.single('image'), updateOffer);
 router.delete('/offers/:id', deleteOffer);
+
+// Driver Offers (Bonus Trips) Management
+router.post('/driver-offers', addDriverOffer);
+router.get('/driver-offers', getDriverOffers);
+router.put('/driver-offers/:id', updateDriverOffer);
+router.delete('/driver-offers/:id', deleteDriverOffer);
 
 export default router;

@@ -1,6 +1,7 @@
 import User from '../Models/User.js';
 import Driver from '../Models/Driver.js';
 import Vehicle from '../Models/Vehicle.js';
+import DriverOffer from '../Models/DriverOffer.js';
 
 // @desc    Get driver profile (with driverDetails)
 // @route   GET /api/driver/profile
@@ -232,20 +233,26 @@ export const getEarnings = async (req, res) => {
     let week = 0;
     let month = 0;
     let total = 0;
+    let todayRides = 0;
+    let totalRides = 0;
 
     bookings.forEach(b => {
       const date = new Date(b.completedAt || b.createdAt);
       const amount = b.finalFare || 0;
       total += amount;
+      totalRides += 1;
 
-      if (date >= startOfToday) today += amount;
+      if (date >= startOfToday) {
+        today += amount;
+        todayRides += 1;
+      }
       if (date >= startOfWeek) week += amount;
       if (date >= startOfMonth) month += amount;
     });
 
     res.json({
       success: true,
-      data: { today, week, month, total, currentBalance: total } // Keeping naming compatible with frontend wallet if needed
+      data: { today, week, month, total, currentBalance: total, todayRides, totalRides }
     });
   } catch (error) {
     console.error(error);
@@ -273,5 +280,58 @@ export const addVehicle = async (req, res, next) => {
     } else {
       res.status(500).json({ success: false, message: 'Server Error adding vehicle' });
     }
+  }
+};
+
+/**
+ * @desc    Get active driver offers
+ * @route   GET /api/driver/offers
+ */
+export const getActiveDriverOffers = async (req, res) => {
+  try {
+    const offers = await DriverOffer.find({ isActive: true }).sort({ createdAt: -1 });
+    res.json({ success: true, count: offers.length, data: offers });
+  } catch (error) {
+    console.error('getActiveDriverOffers error:', error);
+    res.status(500).json({ success: false, message: 'Server Error fetching driver offers' });
+  }
+};
+
+/**
+ * @desc    Get trip modes statistics
+ * @route   GET /api/driver/trip-modes
+ */
+export const getTripModeStats = async (req, res) => {
+  try {
+    const cityDemand = await Booking.countDocuments({ status: 'pending', rideType: { $ne: 'outstation' } });
+    const outstationDemand = await Booking.countDocuments({ status: 'pending', rideType: 'outstation' });
+    
+    const cityDemandCalc = cityDemand > 0 ? cityDemand + 3 : 12; // Example fallback logic
+    const outstationDemandCalc = outstationDemand > 0 ? outstationDemand + 1 : 5;
+    const rentalDemandCalc = 2; // Fixed fallback for rental if not tracked separately
+
+    res.json({
+      success: true,
+      data: {
+        cityPool: {
+          earn: '₹150-₹300',
+          time: '~45 min',
+          demand: cityDemandCalc
+        },
+        outstationPool: {
+          earn: '₹1,200-₹2,500',
+          time: '3-5 hrs',
+          demand: outstationDemandCalc
+        },
+        outstationRental: {
+          earn: '₹3,500-₹8K+',
+          time: 'Full day',
+          demand: rentalDemandCalc
+        }
+      }
+    });
+  } catch (error) {
+    console.error('getTripModeStats error:', error);
+    res.status(500).json({ success: false, message: 'Server Error fetching trip stats' });
   }
 };

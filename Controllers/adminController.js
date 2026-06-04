@@ -5,7 +5,7 @@ import Wallet from '../Models/Wallet.js';
 import Withdrawal from '../Models/Withdrawal.js';
 import PromotedRoute from '../Models/PromotedRoute.js';
 import Offer from '../Models/Offer.js';
-
+import DriverOffer from '../Models/DriverOffer.js';
 // Get list of drivers (with filter for pending/verified)
 export const getDrivers = async (req, res) => {
     try {
@@ -29,6 +29,49 @@ export const getDrivers = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server Error' });
     }
 };
+
+// Get a specific driver's details
+// GET /api/admin/drivers/:id
+export const getDriverByIdAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const driver = await User.findById(id).select('-password');
+        
+        if (!driver || !/^driver$/i.test(driver.role)) {
+            return res.status(404).json({ success: false, message: 'Driver not found' });
+        }
+
+        res.json({
+            success: true,
+            data: driver
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// Get a specific driver's documents
+// GET /api/admin/drivers/:id/documents
+export const getDriverDocumentsAdmin = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const driver = await User.findById(id);
+        
+        if (!driver || !/^driver$/i.test(driver.role)) {
+            return res.status(404).json({ success: false, message: 'Driver not found' });
+        }
+
+        res.json({
+            success: true,
+            data: driver.driverDetails?.documents || {}
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
 
 // Verify driver documents
 export const verifyDriver = async (req, res) => {
@@ -627,7 +670,7 @@ export const updatePromotedRoute = async (req, res) => {
     try {
         const { name, startingPrice, category, pickup, destination, subtitle, discount, tag, duration, rating, seats } = req.body;
         let updateData = { name, startingPrice, category, pickup, destination, subtitle, discount, tag, duration, rating, seats };
-        
+
         if (req.file) {
             const baseUrl = process.env.BASE_URL;
             updateData.image = `${baseUrl}/uploads/${req.file.filename}`;
@@ -715,6 +758,57 @@ export const deleteOffer = async (req, res) => {
     try {
         await Offer.findByIdAndDelete(req.params.id);
         res.json({ success: true, message: 'Offer deleted successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+// --- Driver Offers Management ---
+
+export const addDriverOffer = async (req, res) => {
+    try {
+        const { title, description, targetRides, bonusAmount, isActive } = req.body;
+        const offer = await DriverOffer.create({ title, description, targetRides, bonusAmount, isActive });
+        res.status(201).json({ success: true, data: offer });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const getDriverOffers = async (req, res) => {
+    try {
+        const offers = await DriverOffer.find().sort({ createdAt: -1 });
+        res.json({ success: true, count: offers.length, data: offers });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const updateDriverOffer = async (req, res) => {
+    try {
+        const { title, description, targetRides, bonusAmount, isActive } = req.body;
+        const offer = await DriverOffer.findByIdAndUpdate(
+            req.params.id,
+            { title, description, targetRides, bonusAmount, isActive },
+            { new: true }
+        );
+        if (!offer) {
+            return res.status(404).json({ success: false, message: 'Driver Offer not found' });
+        }
+        res.json({ success: true, data: offer });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server Error' });
+    }
+};
+
+export const deleteDriverOffer = async (req, res) => {
+    try {
+        await DriverOffer.findByIdAndDelete(req.params.id);
+        res.json({ success: true, message: 'Driver Offer deleted successfully' });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: 'Server Error' });
